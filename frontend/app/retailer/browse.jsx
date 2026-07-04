@@ -62,7 +62,6 @@ export default function RetailerBrowse() {
       <View style={styles.cardInfo}>
         <Text style={styles.itemName}>{item.name}</Text>
         <Text style={styles.itemMfg}>{item.mfg} | {item.pack}</Text>
-        <Text style={styles.itemPrice}>₹{item.price.toFixed(2)}</Text>
       </View>
       <TouchableOpacity style={styles.addButton}>
         <Text style={styles.addButtonText}>Add</Text>
@@ -165,12 +164,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
     marginTop: 2,
-  },
-  itemPrice: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.primary,
-    marginTop: 4,
   },
   addButton: {
     backgroundColor: colors.primaryLight,

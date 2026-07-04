@@ -70,16 +70,14 @@ export async function POST(request) {
         continue;
       }
 
-      const numPrice = item.price !== undefined && item.price !== '' ? parseFloat(item.price) : 0.0;
       const numQty = parseInt(item.quantity);
 
-      if (isNaN(numPrice) || numPrice < 0 || isNaN(numQty) || numQty < 0) {
+      if (isNaN(numQty) || numQty < 0) {
         continue; // Skip invalid items
       }
 
       newItems.push({
         name: item.name.trim(),
-        price: numPrice,
         quantity: numQty,
         mfg: item.mfg ? item.mfg.trim() : null,
         pack: item.pack ? item.pack.trim() : null,

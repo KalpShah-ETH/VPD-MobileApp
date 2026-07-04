@@ -40,7 +40,6 @@ export default function SalesmanStock() {
       <View style={styles.cardInfo}>
         <Text style={styles.itemName}>{item.name}</Text>
         <Text style={styles.itemMfg}>{item.mfg} | {item.pack}</Text>
-        <Text style={styles.itemPrice}>₹{item.price.toFixed(2)}</Text>
       </View>
       <View style={styles.stockBadge}>
         <Text style={styles.stockText}>Qty: {item.quantity}</Text>
@@ -124,12 +123,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
     marginTop: 2,
-  },
-  itemPrice: {
-    fontSize: 14,
-    color: colors.textMuted,
-    marginTop: 4,
-  },
   stockBadge: {
     backgroundColor: colors.primaryLight,
     paddingHorizontal: 12,

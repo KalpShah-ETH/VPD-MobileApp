@@ -12,11 +12,9 @@ export default function RetailerCart() {
   const [loading, setLoading] = useState(false);
   // Mock cart items
   const [cartItems, setCartItems] = useState([
-    { id: 1, stockItemId: 101, name: 'Paracetamol 500mg', price: 15.5, quantity: 10, mfg: 'Cipla' },
-    { id: 2, stockItemId: 102, name: 'Amoxicillin 250mg', price: 45.0, quantity: 5, mfg: 'Sun Pharma' }
+    { id: 1, stockItemId: 101, name: 'Paracetamol 500mg', quantity: 10, mfg: 'Cipla' },
+    { id: 2, stockItemId: 102, name: 'Amoxicillin 250mg', quantity: 5, mfg: 'Sun Pharma' }
   ]);
-
-  const totalAmount = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
   const handlePlaceOrder = async () => {
     if (cartItems.length === 0) return;
@@ -50,10 +48,9 @@ export default function RetailerCart() {
       <View style={styles.cardInfo}>
         <Text style={styles.itemName}>{item.name}</Text>
         <Text style={styles.itemMfg}>{item.mfg}</Text>
-        <Text style={styles.itemPrice}>₹{item.price.toFixed(2)} x {item.quantity}</Text>
       </View>
       <View style={styles.cardTotal}>
-        <Text style={styles.itemTotal}>₹{(item.price * item.quantity).toFixed(2)}</Text>
+        <Text style={styles.itemTotal}>Qty: {item.quantity}</Text>
       </View>
     </View>
   );
@@ -73,10 +70,6 @@ export default function RetailerCart() {
             contentContainerStyle={{ padding: 16 }}
           />
           <View style={styles.footer}>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total Amount:</Text>
-              <Text style={styles.totalValue}>₹{totalAmount.toFixed(2)}</Text>
-            </View>
             <TouchableOpacity 
               style={styles.checkoutButton}
               onPress={handlePlaceOrder}
@@ -135,14 +128,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2,
   },
-  itemPrice: {
-    fontSize: 14,
-    color: colors.textMuted,
-    marginTop: 4,
-  },
-  cardTotal: {
-    marginLeft: 16,
-  },
   itemTotal: {
     fontSize: 16,
     fontWeight: 'bold',
@@ -153,21 +138,6 @@ const styles = StyleSheet.create({
     padding: 24,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-  },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  totalLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.textDark,
-  },
-  totalValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.primary,
   },
   checkoutButton: {
     backgroundColor: colors.primary,

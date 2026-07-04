@@ -49,7 +49,6 @@ export async function GET(request) {
         select: {
           id: true,
           name: true,
-          price: true,
           quantity: true,
           mfg: true,
           pack: true,
@@ -66,7 +65,6 @@ export async function GET(request) {
       items: items.map(i => ({
         id: i.id,
         name: i.name,
-        price: i.price,
         quantity: i.quantity,
         mfg: i.mfg,
         pack: i.pack,
