@@ -49,14 +49,14 @@ export default function UnifiedLogin() {
     setErrorMsg(null);
 
     // Validation
-    if (role === 'salesman' || role === 'retailer') {
+    if (role === 'retailer') {
       if (!usernameOrPhone || usernameOrPhone.length !== 10 || !/^\d+$/.test(usernameOrPhone)) {
         showError('Phone number must be exactly 10 digits.');
         return;
       }
-    } else if (role === 'admin') {
+    } else if (role === 'admin' || role === 'salesman') {
       if (!usernameOrPhone) {
-        showError('Admin username is required.');
+        showError(`${role === 'admin' ? 'Admin' : 'Salesman'} username/phone is required.`);
         return;
       }
     }
@@ -164,10 +164,10 @@ export default function UnifiedLogin() {
         </Text>
         <TextInput
           style={styles.input}
-          placeholder={role === 'admin' ? "Enter admin username" : "Enter 10-digit phone number"}
+          placeholder={role === 'retailer' ? "Enter 10-digit phone number" : "Enter username/phone"}
           value={usernameOrPhone}
           onChangeText={setUsernameOrPhone}
-          keyboardType={role === 'admin' ? "default" : "phone-pad"}
+          keyboardType={role === 'retailer' ? "phone-pad" : "default"}
           autoCapitalize="none"
         />
 

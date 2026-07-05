@@ -2,6 +2,7 @@
 const BASE_URL = 'http://10.0.2.2:3000';
 
 export const api = {
+  baseURL: BASE_URL,
   salesmanLogin: (username, password) =>
     fetch(`${BASE_URL}/api/salesman/login`, {
       method: 'POST',
@@ -23,6 +24,12 @@ export const api = {
     fetch(`${BASE_URL}/api/salesman/stock?page=${page}&search=${search}`, {
       headers: { Authorization: `Bearer ${token}` }
     }).then(res => res.json()),
+
+  retailerBrowse: (token, page, search, companyId) => {
+    let url = `${BASE_URL}/api/retailer/browse?page=${page}&search=${search}`;
+    if (companyId) url += `&companyId=${companyId}`;
+    return fetch(url, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json());
+  },
 
   retailerLogin: (phone) =>
     fetch(`${BASE_URL}/api/retailer/auth`, {

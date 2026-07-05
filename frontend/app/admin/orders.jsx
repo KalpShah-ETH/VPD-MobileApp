@@ -66,8 +66,8 @@ export default function AdminOrdersFeed() {
           <Text style={styles.quantity}>Qty: {item.quantity}</Text>
         </View>
 
-        <View style={[styles.badge, item.status === 'BILLING DONE' ? styles.badgeSuccess : styles.badgeWarning]}>
-          <Text style={[styles.badgeText, item.status === 'BILLING DONE' ? styles.badgeTextSuccess : styles.badgeTextWarning]}>
+        <View style={[styles.badge, item.status === 'BILLING_DONE' ? styles.badgeSuccess : styles.badgeWarning]}>
+          <Text style={[styles.badgeText, item.status === 'BILLING_DONE' ? styles.badgeTextSuccess : styles.badgeTextWarning]}>
             {item.status.replace('_', ' ')}
           </Text>
         </View>
