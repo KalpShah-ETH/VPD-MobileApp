@@ -74,7 +74,7 @@ export async function validateSession(cookiesObj, cookieName, expectedRole) {
   
   if (!token) {
     try {
-      const headersList = headers();
+      const headersList = await headers();
       const authHeader = headersList.get('authorization');
       if (authHeader && authHeader.startsWith('Bearer ')) {
         token = authHeader.substring(7);
