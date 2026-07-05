@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/db';
 import { signToken, setAuthCookie, deleteAuthCookie, blacklistToken } from '@/lib/auth';
@@ -111,7 +111,17 @@ export async function handleLoginRequest(request, role) {
 export async function handleLogoutRequest(role) {
   const cookieStore = await cookies();
   const sessionName = `${role}_session`;
-  const token = cookieStore.get(sessionName)?.value;
+  let token = cookieStore.get(sessionName)?.value;
+  
+  if (!token) {
+    try {
+      const headersList = await headers();
+      const authHeader = headersList.get('authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+      }
+    } catch (e) {}
+  }
   
   if (token) {
     await blacklistToken(token);

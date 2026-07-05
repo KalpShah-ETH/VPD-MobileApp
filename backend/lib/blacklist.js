@@ -20,6 +20,7 @@ export async function blacklistToken(token) {
       update: { value: expTimestamp },
       create: { key: 'blacklist:' + token, value: expTimestamp }
     });
+    console.log('blacklistToken SUCCESSFULLY WRITTEN TO DB for token', token.substring(0, 10));
   } catch (err) {
     console.error('Error blacklisting token:', err);
   }
@@ -29,6 +30,7 @@ export async function isTokenBlacklisted(token) {
   if (!token) return false;
   const cached = memCache.get(token);
   if (cached && (Date.now() - cached.cachedAt) < TTL) {
+    console.log('isTokenBlacklisted CACHE HIT for token', token.substring(0, 10));
     return cached.result;
   }
   try {
@@ -36,6 +38,7 @@ export async function isTokenBlacklisted(token) {
       where: { key: 'blacklist:' + token }
     });
     const result = !!setting;
+    console.log('isTokenBlacklisted DB RESULT:', result, 'for token', token.substring(0, 10));
     memCache.set(token, { result, cachedAt: Date.now() });
     return result;
   } catch (err) {
