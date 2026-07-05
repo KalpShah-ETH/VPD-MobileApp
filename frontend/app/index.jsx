@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { colors } from '../constants/colors';
 import { api } from '../services/api';
-import { setToken } from '../services/auth';
+import { saveToken } from '../services/auth';
 
 export default function UnifiedLogin() {
   const router = useRouter();
@@ -98,13 +98,13 @@ export default function UnifiedLogin() {
 
       // Save token and navigate
       if (role === 'admin') {
-        await setToken('admin_token', data.token);
+        await saveToken('admin_token', data.token);
         router.replace('/admin/dashboard');
       } else if (role === 'salesman') {
-        await setToken('salesman_token', data.token);
+        await saveToken('salesman_token', data.token);
         router.replace('/salesman/dashboard');
       } else if (role === 'retailer') {
-        await setToken('retailer_token', data.token);
+        await saveToken('retailer_token', data.token);
         router.replace('/retailer/browse');
       }
 

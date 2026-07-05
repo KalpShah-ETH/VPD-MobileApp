@@ -67,7 +67,7 @@ export default function RetailerCart() {
     <View style={styles.card}>
       <View style={styles.cardInfo}>
         <Text style={styles.itemName}>{item.name}</Text>
-        <Text style={styles.itemMfg}>{item.companyName}</Text>
+        <Text style={styles.itemMfg}>{item.mfg || 'No Manufacturer'}</Text>
       </View>
       <View style={styles.cardTotal}>
         <Text style={styles.itemTotal}>Qty: {item.cartQty}</Text>

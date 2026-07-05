@@ -25,7 +25,7 @@ export default function SalesmanOrders() {
       });
       const data = await res.json();
       if (res.ok) {
-        setOrders(data.orders || []);
+        setOrders(Array.isArray(data) ? data : []);
       } else {
         Alert.alert('Error', data.error || 'Failed to fetch orders');
       }
@@ -44,7 +44,7 @@ export default function SalesmanOrders() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ orderId: id, status: 'BILLING_DONE' })
+        body: JSON.stringify({ id: id, status: 'BILLING_DONE' })
       });
       const data = await res.json();
       if (res.ok) {
@@ -66,7 +66,10 @@ export default function SalesmanOrders() {
           <Text style={styles.date}>{new Date(item.createdAt).toLocaleDateString()}</Text>
         </View>
         <View style={styles.cardBody}>
-          <Text style={styles.info}>Total: ₹{item.totalAmount.toFixed(2)}</Text>
+          <View>
+            <Text style={styles.info}>Product: {item.productName}</Text>
+            <Text style={styles.info}>Qty: {item.quantity}</Text>
+          </View>
           <View style={[styles.badge, isDone ? styles.badgeSuccess : styles.badgeWarning]}>
             <Text style={[styles.badgeText, isDone ? styles.badgeTextSuccess : styles.badgeTextWarning]}>
               {item.status.replace('_', ' ')}

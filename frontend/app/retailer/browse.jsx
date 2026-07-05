@@ -63,7 +63,7 @@ export default function RetailerBrowse() {
     try {
       const res = await api.retailerBrowse(authToken, pageNum, searchQuery, compId);
       
-      const newData = res.companies ? res.companies : res.stockItems;
+      const newData = Array.isArray(res) ? res : res.stockItems;
       if (!newData) return;
 
       if (pageNum === 1) {
@@ -121,7 +121,7 @@ export default function RetailerBrowse() {
     >
       <View style={styles.cardInfo}>
         <Text style={styles.itemName}>{item.name}</Text>
-        <Text style={styles.itemMfg}>{item.companyName} | {item._count?.stockItems || 0} items</Text>
+        <Text style={styles.itemMfg}>{item.companyName} | {item.stockItemsCount || 0} items</Text>
       </View>
       <Text style={{color: colors.primary, fontWeight: 'bold'}}>→</Text>
     </TouchableOpacity>
