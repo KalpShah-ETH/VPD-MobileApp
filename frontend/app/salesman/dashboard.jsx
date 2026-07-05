@@ -1,12 +1,28 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors } from '../../constants/colors';
-import { removeToken } from '../../services/auth';
+import { getToken, removeToken } from '../../services/auth';
+import { api } from '../../services/api';
+import { registerForPushNotifications } from '../../services/notifications';
 import DashboardLayout from '../../src/components/DashboardLayout';
 import DashboardCard from '../../src/components/DashboardCard';
+import { useEffect } from 'react';
 
 export default function SalesmanDashboard() {
   const router = useRouter();
+
+  useEffect(() => {
+    const setupNotifications = async () => {
+      const token = await registerForPushNotifications();
+      if (token) {
+        const sessionToken = await getToken('salesman_token');
+        if (sessionToken) {
+          api.salesmanPushToken(token, sessionToken).catch(err => console.log('Failed to save push token', err));
+        }
+      }
+    };
+    setupNotifications();
+  }, []);
 
   const handleLogout = async () => {
     await removeToken('salesman_token');

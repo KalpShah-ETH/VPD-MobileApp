@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/db';
 import { signToken, setAuthCookie, deleteAuthCookie, blacklistToken } from '@/lib/auth';
+import { cleanExpiredBlacklist } from '@/lib/blacklist';
 
 /**
  * Handles login requests centrally for all roles.
@@ -12,6 +13,11 @@ import { signToken, setAuthCookie, deleteAuthCookie, blacklistToken } from '@/li
 export async function handleLoginRequest(request, role) {
   try {
     const body = await request.json();
+    
+    // 1% chance to run automatic blacklist cleanup in the background
+    if (Math.random() < 0.01) {
+      cleanExpiredBlacklist().catch(err => console.error('Background cleanup failed', err));
+    }
     
     // Retailer login uses phone. Admin and Salesman use username/password.
     if (role === 'retailer') {

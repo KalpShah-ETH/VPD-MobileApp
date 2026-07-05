@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cleanupOldOrders } from '@/lib/cleanup';
+import { cleanExpiredBlacklist } from '@/lib/blacklist';
 
 export async function GET(request) {
   try {
@@ -17,6 +18,7 @@ export async function GET(request) {
     }
 
     const deletedCount = await cleanupOldOrders();
+    await cleanExpiredBlacklist();
     return NextResponse.json({ 
       success: true, 
       message: `Cleanup completed successfully. Deleted ${deletedCount} old orders.`,
