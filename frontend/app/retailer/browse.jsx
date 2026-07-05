@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, ImageBackground } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../../constants/colors';
@@ -13,6 +13,7 @@ export default function RetailerBrowse() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [token, setToken] = useState(null);
+  const [bgImage, setBgImage] = useState(null);
 
   useEffect(() => {
     const init = async () => {
@@ -23,9 +24,22 @@ export default function RetailerBrowse() {
       }
       setToken(t);
       loadStock(t, 1, '');
+      fetchBgImage();
     };
     init();
   }, []);
+
+  const fetchBgImage = async () => {
+    try {
+      const res = await fetch(`${api.baseURL}/api/retailer/bg-image`);
+      const data = await res.json();
+      if (data.image) {
+        setBgImage(`data:image/jpeg;base64,${data.image}`);
+      }
+    } catch (err) {
+      console.log('Failed to fetch bg image', err);
+    }
+  };
 
   const loadStock = async (authToken, pageNum, searchQuery) => {
     try {
@@ -71,7 +85,20 @@ export default function RetailerBrowse() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      {bgImage ? (
+        <ImageBackground source={{ uri: bgImage }} style={styles.bgImage} resizeMode="stretch">
+          {renderContent()}
+        </ImageBackground>
+      ) : (
+        renderContent()
+      )}
+    </View>
+  );
+  
+  function renderContent() {
+    return (
+      <>
+        <View style={styles.header}>
         <TextInput 
           style={styles.searchBar}
           value={search}
@@ -104,17 +131,23 @@ export default function RetailerBrowse() {
         />
       )}
 
-      <TouchableOpacity style={styles.cartFab} onPress={() => router.push('/retailer/cart')}>
-        <Text style={styles.cartFabText}>View Cart (2)</Text>
-      </TouchableOpacity>
-    </View>
-  );
+        <TouchableOpacity style={styles.cartFab} onPress={() => router.push('/retailer/cart')}>
+          <Text style={styles.cartFabText}>View Cart (2)</Text>
+        </TouchableOpacity>
+      </>
+    );
+  }
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  bgImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
   },
   header: {
     flexDirection: 'row',

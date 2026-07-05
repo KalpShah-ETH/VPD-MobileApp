@@ -63,7 +63,7 @@ model Order {
   salesman    Salesman @relation(fields: [salesmanId], references: [id], onDelete: Cascade)
   productName String   // Name of product at time of order
   quantity    Int
-  status      String   @default("PENDING") // PENDING or FULFILLED
+  status      String   @default("PENDING_BILLING") // PENDING_BILLING or BILLING_DONE
   createdAt   DateTime @default(now())
 
   @@index([salesmanId])

@@ -13,15 +13,15 @@ export default function SalesmanOrders() {
     // Mocking orders since backend might not have standard GET route structured perfectly yet
     setTimeout(() => {
       setOrders([
-        { id: 101, shopName: 'Apollo Pharmacy', items: 3, total: 450.50, status: 'PENDING', date: '2023-10-25' },
-        { id: 102, shopName: 'MedPlus', items: 1, total: 120.00, status: 'FULFILLED', date: '2023-10-24' }
+        { id: 101, shopName: 'Apollo Pharmacy', items: 3, total: 450.50, status: 'PENDING BILLING', date: '2023-10-25' },
+        { id: 102, shopName: 'MedPlus', items: 1, total: 120.00, status: 'BILLING DONE', date: '2023-10-24' }
       ]);
       setLoading(false);
     }, 800);
   }, []);
 
   const handleMarkFulfilled = (id) => {
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'FULFILLED' } : o));
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'BILLING DONE' } : o));
     // In a real app, make an API call to update status
   };
 
@@ -33,19 +33,21 @@ export default function SalesmanOrders() {
       </View>
       <View style={styles.cardBody}>
         <Text style={styles.info}>Items: {item.items} | Total: ₹{item.total.toFixed(2)}</Text>
-        <View style={[styles.badge, item.status === 'FULFILLED' ? styles.badgeSuccess : styles.badgeWarning]}>
-          <Text style={[styles.badgeText, item.status === 'FULFILLED' ? styles.badgeTextSuccess : styles.badgeTextWarning]}>
+        <View style={[styles.badge, item.status === 'BILLING DONE' ? styles.badgeSuccess : styles.badgeWarning]}>
+          <Text style={[styles.badgeText, item.status === 'BILLING DONE' ? styles.badgeTextSuccess : styles.badgeTextWarning]}>
             {item.status}
           </Text>
         </View>
       </View>
-      {item.status === 'PENDING' && (
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => handleMarkFulfilled(item.id)}
-        >
-          <Text style={styles.actionButtonText}>Mark as Fulfilled</Text>
-        </TouchableOpacity>
+      {item.status === 'PENDING BILLING' && (
+        <View style={styles.actionRow}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handleMarkFulfilled(item.id)}
+          >
+            <Text style={styles.actionButtonText}>Billing Done ✓</Text>
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );
@@ -127,14 +129,21 @@ const styles = StyleSheet.create({
   badgeTextWarning: {
     color: '#E65100',
   },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+  },
   actionButton: {
     backgroundColor: colors.primaryLight,
-    padding: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: 6,
     alignItems: 'center',
+    alignSelf: 'flex-start',
   },
   actionButtonText: {
     color: colors.primary,
     fontWeight: 'bold',
+    fontSize: 14,
   }
 });

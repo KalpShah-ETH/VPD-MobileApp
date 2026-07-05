@@ -93,7 +93,7 @@ export async function POST(request) {
             salesmanId: dbRetailer.salesmanId || stockItem.salesman.id,
             productName: stockItem.name,
             quantity: entry.quantity,
-            status: 'PENDING'
+            status: 'PENDING_BILLING'
           }
         });
 

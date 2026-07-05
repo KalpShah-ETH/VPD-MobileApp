@@ -55,8 +55,8 @@ export async function PUT(request) {
     }
 
     const upperStatus = status.toUpperCase();
-    if (upperStatus !== 'PENDING' && upperStatus !== 'FULFILLED') {
-      return NextResponse.json({ error: 'Invalid status value. Must be PENDING or FULFILLED' }, { status: 400 });
+    if (upperStatus !== 'PENDING_BILLING' && upperStatus !== 'BILLING_DONE') {
+      return NextResponse.json({ error: 'Invalid status value. Must be PENDING_BILLING or BILLING_DONE' }, { status: 400 });
     }
 
     const order = await prisma.order.update({

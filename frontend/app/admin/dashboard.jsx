@@ -24,8 +24,8 @@ export default function AdminDashboard() {
   return (
     <DashboardLayout header={header}>
       <DashboardCard title="Manage Salesmen" subtitle="Add, edit or block" onPress={() => router.push('/admin/manage-salesmen')} />
-      <DashboardCard title="View All Orders" subtitle="Global order history" onPress={() => {}} />
-      <DashboardCard title="Background Image" subtitle="Update retailer app BG" onPress={() => {}} />
+      <DashboardCard title="View All Orders" subtitle="Global order history" onPress={() => router.push('/admin/orders')} />
+      <DashboardCard title="Background Image" subtitle="Update retailer app BG" onPress={() => router.push('/admin/background')} />
       <DashboardCard title="Bulk Stock Upload" subtitle="Global stock catalogue" onPress={() => router.push('/admin/upload-stock')} />
     </DashboardLayout>
   );
