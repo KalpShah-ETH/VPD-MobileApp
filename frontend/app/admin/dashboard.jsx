@@ -1,12 +1,35 @@
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
-import { removeToken } from '../../services/auth';
-import { colors } from '../../constants/colors';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { removeToken, getToken } from '../../services/auth';
+import { api } from '../../services/api';
+import { colors, radius } from '../../constants/colors';
 import DashboardLayout from '../../src/components/DashboardLayout';
 import DashboardCard from '../../src/components/DashboardCard';
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const [pendingOrders, setPendingOrders] = useState(0);
+
+  const fetchPendingOrders = async () => {
+    try {
+      const token = await getToken('admin_token');
+      const res = await api.adminOrders(token);
+      if (res && res.orders) {
+        // Enums used by backend/web are PENDING / FULFILLED.
+        const pendingCount = res.orders.filter(o => o.status === 'PENDING').length;
+        setPendingOrders(pendingCount);
+      }
+    } catch (err) {
+      console.log('Failed to fetch orders stats', err);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchPendingOrders();
+    }, [])
+  );
 
   const handleLogout = () => {
     Alert.alert(
@@ -28,7 +51,7 @@ export default function AdminDashboard() {
 
   const header = (
     <View style={styles.header}>
-      <Text style={styles.title}>Welcome, Admin</Text>
+      <Text style={styles.title}>🛡️ VPD Admin</Text>
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
@@ -38,9 +61,11 @@ export default function AdminDashboard() {
   return (
     <DashboardLayout header={header}>
       <DashboardCard title="Manage Salesmen" subtitle="Add, edit or block" onPress={() => router.push('/admin/manage-salesmen')} />
-      <DashboardCard title="View All Orders" subtitle="Global order history" onPress={() => router.push('/admin/orders')} />
+      <DashboardCard title="View All Orders" subtitle="Global order history" badge={pendingOrders > 0 ? pendingOrders : null} onPress={() => router.push('/admin/orders')} />
+      <DashboardCard title="Retailer View Preview" subtitle="Browse as retailer" onPress={() => router.push('/admin/preview')} />
       <DashboardCard title="Background Image" subtitle="Update retailer app BG" onPress={() => router.push('/admin/background')} />
       <DashboardCard title="Bulk Stock Upload" subtitle="Global stock catalogue" onPress={() => router.push('/admin/upload-stock')} />
+      <DashboardCard title="Settings" subtitle="Admins & Upload History" onPress={() => router.push('/admin/settings')} />
     </DashboardLayout>
   );
 }
@@ -54,16 +79,17 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.textDark,
+    fontFamily: 'Inter_700Bold',
+    color: colors.primary,
   },
   logoutButton: {
-    padding: 8,
-    backgroundColor: colors.danger,
-    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: colors.dangerLight,
+    borderRadius: radius.sm,
   },
   logoutText: {
-    color: colors.white,
-    fontWeight: 'bold',
+    color: colors.danger,
+    fontFamily: 'Inter_600SemiBold',
   }
 });

@@ -1,13 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, ImageBackground, Alert, Dimensions } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useState, useEffect, useRef } from 'react';
+import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, ImageBackground } from 'react-native';
+import { useRouter } from 'expo-router';
 import { colors, radius, shadow } from '../../constants/colors';
 import { api } from '../../services/api';
-import { getToken, removeToken } from '../../services/auth';
-import Toast from 'react-native-toast-message';
+import { getToken } from '../../services/auth';
 
-export default function RetailerBrowse() {
+export default function RetailerPreview() {
   const router = useRouter();
   const [data, setData] = useState([]);
   const [search, setSearch] = useState('');
@@ -19,43 +17,22 @@ export default function RetailerBrowse() {
   const [bgImage, setBgImage] = useState(null);
   const [selectedCompanyId, setSelectedCompanyId] = useState(null);
   const [selectedCompanyName, setSelectedCompanyName] = useState(null);
-  const [cart, setCart] = useState({});
-  const [shopName, setShopName] = useState('Shop');
-  const [quantities, setQuantities] = useState({});
 
   const debounceTimer = useRef(null);
 
-  // Load initial data and cart
   useEffect(() => {
     const init = async () => {
-      const t = await getToken('retailer_token');
+      const t = await getToken('admin_token');
       if (!t) {
         router.replace('/');
         return;
       }
       setToken(t);
-      
-      // Determine shop name (could be decoded from token, here mocked to Generic for parity)
-      setShopName('My Shop');
-
       loadBgImage();
-      
-      const savedCart = await AsyncStorage.getItem('retailer_cart');
-      if (savedCart) setCart(JSON.parse(savedCart));
-
       loadData(t, 1, '', null);
     };
     init();
   }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      AsyncStorage.getItem('retailer_cart').then(savedCart => {
-        if (savedCart) setCart(JSON.parse(savedCart));
-        else setCart({});
-      });
-    }, [])
-  );
 
   const loadBgImage = async () => {
     try {
@@ -68,6 +45,7 @@ export default function RetailerBrowse() {
   const loadData = async (authToken, pageNum, searchQuery, compId) => {
     setLoading(pageNum === 1);
     try {
+      // In preview mode, admins can fetch the same retailer endpoint (mocked or real)
       const res = await api.retailerBrowse(authToken, pageNum, searchQuery, compId);
       
       const newData = Array.isArray(res) ? res : res.stockItems || [];
@@ -76,7 +54,7 @@ export default function RetailerBrowse() {
       if (pageNum === 1) {
         setData(newData);
         if (res.totalPages) setTotalPages(res.totalPages);
-        else setTotalPages(Math.ceil(newData.length / 50) || 1); // Mock fallback if API doesn't send totalPages
+        else setTotalPages(Math.ceil(newData.length / 50) || 1);
       } else {
         setData(prev => [...prev, ...newData]);
       }
@@ -101,57 +79,6 @@ export default function RetailerBrowse() {
     
     return () => clearTimeout(debounceTimer.current);
   }, [search]);
-
-  const handleLogout = () => {
-    Alert.alert(
-      "Confirm Logout",
-      "Are you sure you want to logout?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Logout", 
-          style: "destructive",
-          onPress: async () => {
-            await removeToken('retailer_token');
-            router.replace('/?logout=true');
-          }
-        }
-      ]
-    );
-  };
-
-  const updateQuantity = (itemId, maxQty, delta) => {
-    setQuantities(prev => {
-      const current = prev[itemId] || 1;
-      let next = current + delta;
-      if (next < 1) next = 1;
-      if (next > maxQty) next = maxQty;
-      return { ...prev, [itemId]: next };
-    });
-  };
-
-  const handleAddToCart = async (item) => {
-    const qtyToAdd = quantities[item.id] || 1;
-    const newCart = { ...cart };
-    
-    if (newCart[item.id]) {
-      newCart[item.id].cartQty += qtyToAdd;
-    } else {
-      newCart[item.id] = { ...item, cartQty: qtyToAdd };
-    }
-    
-    // Ensure we don't exceed max qty
-    if (newCart[item.id].cartQty > item.quantity) {
-      newCart[item.id].cartQty = item.quantity;
-    }
-
-    setCart(newCart);
-    await AsyncStorage.setItem('retailer_cart', JSON.stringify(newCart));
-    Toast.show({ type: 'success', text1: `${item.name} added to cart!` });
-    
-    // Reset stepper
-    setQuantities(prev => ({...prev, [item.id]: 1}));
-  };
 
   const renderCompanyCard = ({ item }) => {
     const avatarColor = `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`;
@@ -182,7 +109,6 @@ export default function RetailerBrowse() {
 
   const renderStockCard = ({ item }) => {
     const isSoldOut = item.quantity <= 0;
-    const qty = quantities[item.id] || 1;
 
     return (
       <View style={[
@@ -203,38 +129,14 @@ export default function RetailerBrowse() {
           )}
         </View>
 
-        {!isSoldOut && (
-          <View style={styles.actionArea}>
-            <View style={styles.stepperContainer}>
-              <TouchableOpacity style={styles.stepperBtn} onPress={() => updateQuantity(item.id, item.quantity, -1)}>
-                <Text style={styles.stepperBtnText}>-</Text>
-              </TouchableOpacity>
-              <TextInput 
-                style={styles.stepperInput}
-                value={qty.toString()}
-                editable={false}
-              />
-              <TouchableOpacity style={styles.stepperBtn} onPress={() => updateQuantity(item.id, item.quantity, 1)}>
-                <Text style={styles.stepperBtnText}>+</Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity style={styles.addCta} onPress={() => handleAddToCart(item)}>
-              <Text style={styles.addCtaText}>Add {qty} strip{qty > 1 ? 's' : ''} to Cart</Text>
-            </TouchableOpacity>
+        <View style={styles.actionArea}>
+          <View style={[styles.addCta, { backgroundColor: colors.bgPrimary }]}>
+            <Text style={[styles.addCtaText, { color: colors.textMuted }]}>Read Only Preview</Text>
           </View>
-        )}
-        {isSoldOut && (
-          <View style={styles.actionArea}>
-            <View style={[styles.addCta, { backgroundColor: colors.grayOut }]}>
-              <Text style={styles.addCtaText}>SOLD OUT</Text>
-            </View>
-          </View>
-        )}
+        </View>
       </View>
     );
   };
-
-  const cartStripCount = Object.values(cart).reduce((sum, item) => sum + item.cartQty, 0);
 
   return (
     <View style={styles.container}>
@@ -251,7 +153,6 @@ export default function RetailerBrowse() {
   function renderContent() {
     return (
       <>
-        {/* Sticky Header Bar for Company View */}
         {selectedCompanyId ? (
           <View style={styles.stickyHeader}>
             <TouchableOpacity onPress={() => {
@@ -267,13 +168,15 @@ export default function RetailerBrowse() {
           </View>
         ) : (
           <View style={styles.mainHeader}>
-            <View>
-              <Text style={styles.mainTitle}>VPD Orders</Text>
-              <Text style={styles.mainSubtitle}>Logged in: {shopName}</Text>
+            <View style={{flexDirection: 'row', alignItems: 'center'}}>
+              <TouchableOpacity onPress={() => router.back()} style={[styles.backCircle, {marginRight: 16}]}>
+                <Text style={styles.backArrow}>←</Text>
+              </TouchableOpacity>
+              <View>
+                <Text style={styles.mainTitle}>Retailer Preview</Text>
+                <Text style={styles.mainSubtitle}>Read-only mode</Text>
+              </View>
             </View>
-            <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-              <Text style={styles.logoutText}>Exit</Text>
-            </TouchableOpacity>
           </View>
         )}
 
@@ -321,12 +224,6 @@ export default function RetailerBrowse() {
             }
           />
         )}
-
-        {cartStripCount > 0 && (
-          <TouchableOpacity style={styles.cartFab} onPress={() => router.push('/retailer/cart')}>
-            <Text style={styles.cartFabText}>🛒 View Cart ({cartStripCount} strips)</Text>
-          </TouchableOpacity>
-        )}
       </>
     );
   }
@@ -338,13 +235,10 @@ const styles = StyleSheet.create({
   
   mainHeader: {
     flexDirection: 'row', padding: 16, backgroundColor: colors.bgCard,
-    justifyContent: 'space-between', alignItems: 'center',
-    borderBottomWidth: 1, borderBottomColor: colors.border,
+    alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  mainTitle: { fontSize: 26, fontWeight: '800', color: colors.primary, fontFamily: 'Inter_700Bold' },
+  mainTitle: { fontSize: 22, fontWeight: '800', color: colors.primary, fontFamily: 'Inter_700Bold' },
   mainSubtitle: { fontSize: 14, color: colors.textMuted, fontFamily: 'Inter_400Regular' },
-  logoutBtn: { padding: 8, backgroundColor: colors.dangerLight, borderRadius: radius.sm },
-  logoutText: { color: colors.danger, fontWeight: 'bold', fontFamily: 'Inter_600SemiBold' },
   
   stickyHeader: {
     flexDirection: 'row', padding: 12, backgroundColor: colors.bgCard, alignItems: 'center',
@@ -394,20 +288,8 @@ const styles = StyleSheet.create({
   actionArea: {
     backgroundColor: colors.bgPrimary, padding: 16, borderTopWidth: 1, borderTopColor: colors.border,
   },
-  stepperContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, alignSelf: 'flex-start', backgroundColor: colors.bgCard, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border },
-  stepperBtn: { paddingHorizontal: 16, paddingVertical: 8 },
-  stepperBtnText: { fontSize: 18, fontFamily: 'Inter_700Bold', color: colors.textMain },
-  stepperInput: { width: 40, textAlign: 'center', fontSize: 16, fontFamily: 'Inter_600SemiBold', color: colors.textMain },
-  
   addCta: { backgroundColor: colors.primary, paddingVertical: 14, borderRadius: radius.sm, alignItems: 'center', width: '100%' },
   addCtaText: { color: colors.white, fontFamily: 'Inter_700Bold', fontSize: 16 },
-
-  cartFab: {
-    position: 'absolute', bottom: 24, right: 24, backgroundColor: colors.primary,
-    paddingVertical: 12, paddingHorizontal: 24, borderRadius: 30, alignItems: 'center',
-    ...shadow.lg,
-  },
-  cartFabText: { color: colors.white, fontFamily: 'Inter_700Bold', fontSize: 16 },
 
   paginationFooter: { padding: 16, alignItems: 'center' },
   paginationText: { fontFamily: 'Inter_600SemiBold', color: colors.textMuted }

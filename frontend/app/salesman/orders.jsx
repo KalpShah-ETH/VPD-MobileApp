@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
-import { colors } from '../../constants/colors';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Linking } from 'react-native';
+import { useRouter } from 'expo-router';
+import { colors, radius, shadow } from '../../constants/colors';
 import { api } from '../../services/api';
 import { getToken } from '../../services/auth';
+import Toast from 'react-native-toast-message';
 
 export default function SalesmanOrders() {
+  const router = useRouter();
   const [orders, setOrders] = useState([]);
+  const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL', 'PENDING', 'FULFILLED'
 
   useEffect(() => {
     const init = async () => {
@@ -25,16 +31,37 @@ export default function SalesmanOrders() {
       });
       const data = await res.json();
       if (res.ok) {
-        setOrders(Array.isArray(data) ? data : []);
+        const fetchedOrders = Array.isArray(data) ? data : (data.orders || []);
+        setOrders(fetchedOrders);
+        setFilteredOrders(fetchedOrders);
       } else {
-        Alert.alert('Error', data.error || 'Failed to fetch orders');
+        Toast.show({ type: 'error', text1: 'Error', text2: data.error });
       }
     } catch (err) {
-      Alert.alert('Error', 'Network error while fetching orders.');
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Network error while fetching orders.' });
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    let result = orders;
+    
+    if (statusFilter !== 'ALL') {
+      result = result.filter(o => o.status === statusFilter);
+    }
+
+    if (search) {
+      const lower = search.toLowerCase();
+      result = result.filter(o => 
+        o.id?.toString().includes(lower) ||
+        o.retailer?.shopName?.toLowerCase().includes(lower) ||
+        o.productName?.toLowerCase().includes(lower)
+      );
+    }
+
+    setFilteredOrders(result);
+  }, [search, statusFilter, orders]);
 
   const handleMarkFulfilled = async (id) => {
     try {
@@ -44,45 +71,58 @@ export default function SalesmanOrders() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ id: id, status: 'BILLING_DONE' })
+        body: JSON.stringify({ id: id, status: 'FULFILLED' })
       });
       const data = await res.json();
       if (res.ok) {
-        setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'BILLING_DONE' } : o));
+        setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'FULFILLED' } : o));
+        Toast.show({ type: 'success', text1: 'Order Marked Delivered' });
       } else {
-        Alert.alert('Error', data.error || 'Failed to update order');
+        Toast.show({ type: 'error', text1: 'Error', text2: data.error || 'Failed to update order' });
       }
     } catch (err) {
-      Alert.alert('Error', 'Network error.');
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Network error.' });
     }
   };
 
+  const total = orders.length;
+  const pendingCount = orders.filter(o => o.status === 'PENDING').length;
+
   const renderItem = ({ item }) => {
-    const isDone = item.status === 'BILLING_DONE';
+    const isDone = item.status === 'FULFILLED';
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <Text style={styles.shopName}>{item.retailer?.shopName || 'Unknown Shop'}</Text>
+          <Text style={styles.orderId}>Order #{item.id}</Text>
           <Text style={styles.date}>{new Date(item.createdAt).toLocaleDateString()}</Text>
         </View>
         <View style={styles.cardBody}>
-          <View>
-            <Text style={styles.info}>Product: {item.productName}</Text>
-            <Text style={styles.info}>Qty: {item.quantity}</Text>
+          <Text style={styles.shopName}>{item.retailer?.shopName || 'Unknown Shop'}</Text>
+          
+          {item.retailer?.phone ? (
+            <TouchableOpacity onPress={() => Linking.openURL(`tel:${item.retailer.phone}`)}>
+              <Text style={styles.phoneLink}>{item.retailer.phone}</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          <View style={styles.productRow}>
+            <Text style={styles.productName}>{item.productName}</Text>
+            <Text style={styles.quantity}>Qty: {item.quantity}</Text>
           </View>
+          
           <View style={[styles.badge, isDone ? styles.badgeSuccess : styles.badgeWarning]}>
             <Text style={[styles.badgeText, isDone ? styles.badgeTextSuccess : styles.badgeTextWarning]}>
-              {item.status.replace('_', ' ')}
+              {isDone ? "✓ Delivered" : "⏳ Pending delivery"}
             </Text>
           </View>
         </View>
-        {item.status === 'PENDING_BILLING' && (
+        {!isDone && (
           <View style={styles.actionRow}>
             <TouchableOpacity 
               style={styles.actionButton}
               onPress={() => handleMarkFulfilled(item.id)}
             >
-              <Text style={styles.actionButtonText}>Billing Done ✓</Text>
+              <Text style={styles.actionButtonText}>✓ Mark Delivered</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -92,15 +132,67 @@ export default function SalesmanOrders() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>←</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>Orders Received</Text>
+      </View>
+
+      <View style={styles.statsGrid}>
+        <View style={styles.statBox}>
+          <Text style={styles.statNumber}>{total}</Text>
+          <Text style={styles.statLabel}>Total Orders</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statNumber}>{pendingCount}</Text>
+          <Text style={styles.statLabel}>Pending</Text>
+        </View>
+      </View>
+
+      <View style={styles.filtersContainer}>
+        <View style={styles.searchContainer}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput 
+            style={styles.searchBar}
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search orders..."
+            placeholderTextColor={colors.textMuted}
+          />
+        </View>
+        
+        <View style={styles.statusFilters}>
+          <TouchableOpacity 
+            style={[styles.filterBtn, statusFilter === 'ALL' && styles.filterBtnActive]}
+            onPress={() => setStatusFilter('ALL')}
+          >
+            <Text style={[styles.filterBtnText, statusFilter === 'ALL' && styles.filterBtnTextActive]}>All</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.filterBtn, statusFilter === 'PENDING' && styles.filterBtnActive]}
+            onPress={() => setStatusFilter('PENDING')}
+          >
+            <Text style={[styles.filterBtnText, statusFilter === 'PENDING' && styles.filterBtnTextActive]}>Pending</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.filterBtn, statusFilter === 'FULFILLED' && styles.filterBtnActive]}
+            onPress={() => setStatusFilter('FULFILLED')}
+          >
+            <Text style={[styles.filterBtnText, statusFilter === 'FULFILLED' && styles.filterBtnTextActive]}>Delivered</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {loading ? (
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
-          data={orders}
+          data={filteredOrders}
           keyExtractor={item => item.id.toString()}
           renderItem={renderItem}
-          contentContainerStyle={{ padding: 16 }}
-          ListEmptyComponent={<Text style={{textAlign: 'center', marginTop: 20}}>No orders found.</Text>}
+          contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
+          ListEmptyComponent={<Text style={styles.emptyText}>No orders found.</Text>}
         />
       )}
     </View>
@@ -108,20 +200,51 @@ export default function SalesmanOrders() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  card: { backgroundColor: colors.white, padding: 16, borderRadius: 8, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  shopName: { fontSize: 18, fontWeight: 'bold', color: colors.textDark },
-  date: { fontSize: 12, color: colors.textMuted },
-  cardBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  info: { fontSize: 14, color: colors.textMuted },
-  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
-  badgeSuccess: { backgroundColor: '#E8F5E9' },
-  badgeWarning: { backgroundColor: '#FFF3E0' },
-  badgeText: { fontSize: 12, fontWeight: 'bold' },
-  badgeTextSuccess: { color: '#2E7D32' },
-  badgeTextWarning: { color: '#E65100' },
-  actionRow: { flexDirection: 'row', justifyContent: 'flex-start' },
-  actionButton: { backgroundColor: colors.primaryLight, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 6, alignItems: 'center', alignSelf: 'flex-start' },
-  actionButtonText: { color: colors.primary, fontWeight: 'bold', fontSize: 14 }
+  container: { flex: 1, backgroundColor: colors.bgPrimary },
+  header: { padding: 16, backgroundColor: colors.bgCard, borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row', alignItems: 'center' },
+  backButton: { marginRight: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: colors.bgPrimary, justifyContent: 'center', alignItems: 'center' },
+  backButtonText: { color: colors.textMain, fontSize: 20, fontFamily: 'Inter_700Bold' },
+  title: { fontSize: 20, fontFamily: 'Inter_700Bold', color: colors.primary },
+
+  statsGrid: { flexDirection: 'row', padding: 16, gap: 12, backgroundColor: colors.bgCard, borderBottomWidth: 1, borderBottomColor: colors.border },
+  statBox: { flex: 1, backgroundColor: colors.bgPrimary, padding: 12, borderRadius: radius.sm, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+  statNumber: { fontSize: 20, fontFamily: 'Inter_700Bold', color: colors.primary },
+  statLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: colors.textMuted },
+  
+  filtersContainer: { backgroundColor: colors.bgCard, borderBottomWidth: 1, borderBottomColor: colors.border },
+  searchContainer: { flexDirection: 'row', backgroundColor: colors.bgPrimary, margin: 16, marginBottom: 8, paddingHorizontal: 12, alignItems: 'center', borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  searchIcon: { fontSize: 16, marginRight: 8 },
+  searchBar: { flex: 1, paddingVertical: 12, fontSize: 16, fontFamily: 'Inter_400Regular' },
+  
+  statusFilters: { flexDirection: 'row', paddingHorizontal: 16, paddingBottom: 16, gap: 8 },
+  filterBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: radius.full, backgroundColor: colors.bgPrimary, borderWidth: 1, borderColor: colors.border },
+  filterBtnActive: { backgroundColor: colors.primaryLight, borderColor: colors.primary },
+  filterBtnText: { fontFamily: 'Inter_600SemiBold', color: colors.textMuted, fontSize: 14 },
+  filterBtnTextActive: { color: colors.primary },
+
+  card: { backgroundColor: colors.bgCard, padding: 16, borderRadius: radius.md, marginBottom: 16, ...shadow.sm },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+  orderId: { fontSize: 14, fontFamily: 'Inter_700Bold', color: colors.primary },
+  date: { fontSize: 12, fontFamily: 'Inter_400Regular', color: colors.textMuted },
+  
+  cardBody: { marginTop: 4 },
+  shopName: { fontSize: 18, fontFamily: 'Inter_700Bold', color: colors.textMain, marginBottom: 4 },
+  phoneLink: { fontSize: 14, color: colors.primary, fontFamily: 'Inter_600SemiBold', marginBottom: 12, textDecorationLine: 'underline' },
+  
+  productRow: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: colors.bgPrimary, padding: 12, borderRadius: radius.sm, marginBottom: 12 },
+  productName: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: colors.textMain, flex: 1 },
+  quantity: { fontSize: 16, fontFamily: 'Inter_700Bold', color: colors.primary, marginLeft: 16 },
+
+  badge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.sm },
+  badgeSuccess: { backgroundColor: colors.primaryLight },
+  badgeWarning: { backgroundColor: colors.warningLight },
+  badgeText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  badgeTextSuccess: { color: colors.success },
+  badgeTextWarning: { color: colors.warning },
+  
+  actionRow: { flexDirection: 'row', justifyContent: 'flex-start', marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
+  actionButton: { backgroundColor: colors.primary, paddingVertical: 12, paddingHorizontal: 20, borderRadius: radius.sm, alignItems: 'center' },
+  actionButtonText: { color: colors.white, fontFamily: 'Inter_700Bold', fontSize: 14 },
+  
+  emptyText: { textAlign: 'center', color: colors.textMuted, marginTop: 40, fontFamily: 'Inter_400Regular', fontSize: 16 }
 });

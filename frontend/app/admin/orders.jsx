@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { View, Text, FlatList, TextInput, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, TextInput, StyleSheet, ActivityIndicator, TouchableOpacity, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
-import { colors } from '../../constants/colors';
+import { colors, radius, shadow } from '../../constants/colors';
 import { api } from '../../services/api';
 import { getToken } from '../../services/auth';
 
@@ -51,34 +51,68 @@ export default function AdminOrdersFeed() {
     }
   }, [search, orders]);
 
-  const renderItem = ({ item }) => (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <Text style={styles.orderId}>Order #{item.id}</Text>
-        <Text style={styles.date}>{new Date(item.createdAt).toLocaleDateString()}</Text>
-      </View>
-      <View style={styles.cardBody}>
-        <Text style={styles.shopName}>{item.retailer?.shopName || 'Unknown Retailer'}</Text>
-        <Text style={styles.salesman}>Salesman: {item.salesman?.companyName || item.salesman?.name}</Text>
-        
-        <View style={styles.productRow}>
-          <Text style={styles.productName}>{item.productName}</Text>
-          <Text style={styles.quantity}>Qty: {item.quantity}</Text>
-        </View>
+  const total = orders.length;
+  const pending = orders.filter(o => o.status === 'PENDING').length;
+  const fulfilled = total - pending;
 
-        <View style={[styles.badge, item.status === 'BILLING_DONE' ? styles.badgeSuccess : styles.badgeWarning]}>
-          <Text style={[styles.badgeText, item.status === 'BILLING_DONE' ? styles.badgeTextSuccess : styles.badgeTextWarning]}>
-            {item.status.replace('_', ' ')}
-          </Text>
+  const renderItem = ({ item }) => {
+    const isFulfilled = item.status === 'FULFILLED';
+    const statusText = isFulfilled ? "✓ Delivered" : "⏳ Pending delivery";
+
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.orderId}>Order #{item.id}</Text>
+          <Text style={styles.date}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+        </View>
+        <View style={styles.cardBody}>
+          <Text style={styles.shopName}>{item.retailer?.shopName || 'Unknown Retailer'}</Text>
+          {item.retailer?.phone ? (
+            <TouchableOpacity onPress={() => Linking.openURL(`tel:${item.retailer.phone}`)}>
+              <Text style={styles.phoneLink}>{item.retailer.phone}</Text>
+            </TouchableOpacity>
+          ) : null}
+          
+          <Text style={styles.salesman}>Salesman: {item.salesman?.companyName || item.salesman?.name}</Text>
+          
+          <View style={styles.productRow}>
+            <Text style={styles.productName}>{item.productName}</Text>
+            <Text style={styles.quantity}>Qty: {item.quantity}</Text>
+          </View>
+
+          <View style={[styles.badge, isFulfilled ? styles.badgeSuccess : styles.badgeWarning]}>
+            <Text style={[styles.badgeText, isFulfilled ? styles.badgeTextSuccess : styles.badgeTextWarning]}>
+              {statusText}
+            </Text>
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>←</Text>
+        </TouchableOpacity>
         <Text style={styles.title}>System Orders Feed</Text>
+      </View>
+
+      {/* Stats Grid */}
+      <View style={styles.statsGrid}>
+        <View style={styles.statBox}>
+          <Text style={styles.statNumber}>{total}</Text>
+          <Text style={styles.statLabel}>Total Initiated</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statNumber}>{pending}</Text>
+          <Text style={styles.statLabel}>Pending</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statNumber}>{fulfilled}</Text>
+          <Text style={styles.statLabel}>Fulfilled</Text>
+        </View>
       </View>
       
       <View style={styles.searchContainer}>
@@ -97,7 +131,7 @@ export default function AdminOrdersFeed() {
           data={filteredOrders}
           keyExtractor={item => item.id.toString()}
           renderItem={renderItem}
-          contentContainerStyle={{ padding: 16 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
           ListEmptyComponent={
             <Text style={styles.emptyText}>No orders captured in system yet.</Text>
           }
@@ -108,121 +142,51 @@ export default function AdminOrdersFeed() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  container: { flex: 1, backgroundColor: colors.bgPrimary },
+  
   header: {
-    padding: 16,
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    padding: 16, backgroundColor: colors.bgCard,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+    flexDirection: 'row', alignItems: 'center'
   },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.textDark,
-  },
-  searchContainer: {
-    padding: 16,
-    backgroundColor: colors.background,
-  },
+  backButton: { marginRight: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: colors.bgPrimary, justifyContent: 'center', alignItems: 'center' },
+  backButtonText: { color: colors.textMain, fontSize: 20, fontFamily: 'Inter_700Bold' },
+  title: { fontSize: 20, fontFamily: 'Inter_700Bold', color: colors.primary },
+
+  statsGrid: { flexDirection: 'row', padding: 16, gap: 12, backgroundColor: colors.bgCard, borderBottomWidth: 1, borderBottomColor: colors.border },
+  statBox: { flex: 1, backgroundColor: colors.bgPrimary, padding: 12, borderRadius: radius.sm, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+  statNumber: { fontSize: 20, fontFamily: 'Inter_700Bold', color: colors.primary },
+  statLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: colors.textMuted },
+  
+  searchContainer: { padding: 16, backgroundColor: colors.bgPrimary },
   searchInput: {
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
-    borderRadius: 8,
-    fontSize: 16,
+    backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border,
+    padding: 12, borderRadius: radius.sm, fontSize: 16, fontFamily: 'Inter_400Regular'
   },
+  
   card: {
-    backgroundColor: colors.white,
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: colors.bgCard, padding: 16, borderRadius: radius.md,
+    marginBottom: 16, ...shadow.sm
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  orderId: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: colors.primary,
-  },
-  date: {
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  cardBody: {
-    marginTop: 4,
-  },
-  shopName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.textDark,
-    marginBottom: 2,
-  },
-  salesman: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginBottom: 12,
-  },
-  productRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: '#f8fafc',
-    padding: 12,
-    borderRadius: 6,
-    marginBottom: 12,
-  },
-  productName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textDark,
-    flex: 1,
-  },
-  quantity: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.primary,
-    marginLeft: 16,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  badgeSuccess: {
-    backgroundColor: '#E8F5E9',
-  },
-  badgeWarning: {
-    backgroundColor: '#FFF3E0',
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  badgeTextSuccess: {
-    color: '#2E7D32',
-  },
-  badgeTextWarning: {
-    color: '#E65100',
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: colors.textMuted,
-    marginTop: 40,
-    fontSize: 16,
-  }
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+  orderId: { fontSize: 14, fontFamily: 'Inter_700Bold', color: colors.primary },
+  date: { fontSize: 12, fontFamily: 'Inter_400Regular', color: colors.textMuted },
+  cardBody: { marginTop: 4 },
+  
+  shopName: { fontSize: 18, fontFamily: 'Inter_700Bold', color: colors.textMain, marginBottom: 4 },
+  phoneLink: { fontSize: 14, color: colors.primary, fontFamily: 'Inter_600SemiBold', marginBottom: 8, textDecorationLine: 'underline' },
+  salesman: { fontSize: 14, fontFamily: 'Inter_400Regular', color: colors.textMuted, marginBottom: 12 },
+  
+  productRow: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: colors.bgPrimary, padding: 12, borderRadius: radius.sm, marginBottom: 12 },
+  productName: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: colors.textMain, flex: 1 },
+  quantity: { fontSize: 16, fontFamily: 'Inter_700Bold', color: colors.primary, marginLeft: 16 },
+  
+  badge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.sm },
+  badgeSuccess: { backgroundColor: colors.primaryLight },
+  badgeWarning: { backgroundColor: colors.warningLight },
+  badgeText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  badgeTextSuccess: { color: colors.success },
+  badgeTextWarning: { color: colors.warning },
+  
+  emptyText: { textAlign: 'center', color: colors.textMuted, marginTop: 40, fontFamily: 'Inter_400Regular', fontSize: 16 }
 });

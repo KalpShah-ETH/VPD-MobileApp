@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Switch, Alert, Modal, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
-import { colors } from '../../constants/colors';
+import { colors, radius, shadow } from '../../constants/colors';
 import { api } from '../../services/api';
 import { getToken } from '../../services/auth';
 import Toast from 'react-native-toast-message';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import * as XLSX from 'xlsx';
 
 export default function AdminManageSalesmen() {
   const router = useRouter();
@@ -14,7 +17,8 @@ export default function AdminManageSalesmen() {
 
   // Modal State
   const [modalVisible, setModalVisible] = useState(false);
-  const [formData, setFormData] = useState({ name: '', companyName: '', phone: '', password: '', canUploadStock: false });
+  const [editId, setEditId] = useState(null);
+  const [formData, setFormData] = useState({ name: '', companyName: '', phone: '', password: '', canUploadStock: false, active: true });
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -49,19 +53,32 @@ export default function AdminManageSalesmen() {
     try {
       const newStatus = !currentStatus;
       setSalesmen(prev => prev.map(s => s.id === id ? { ...s, canUploadStock: newStatus } : s));
-
       const res = await fetch(`${api.baseURL}/api/admin/salesman`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, canUploadStock: newStatus })
       });
-      
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to update permission');
-      
+      if (!res.ok) throw new Error('Failed to update permission');
       Toast.show({ type: 'success', text1: 'Permission Updated' });
     } catch (err) {
       setSalesmen(prev => prev.map(s => s.id === id ? { ...s, canUploadStock: currentStatus } : s));
+      Toast.show({ type: 'error', text1: 'Error', text2: err.message });
+    }
+  };
+
+  const toggleActiveStatus = async (id, currentStatus) => {
+    try {
+      const newStatus = !currentStatus;
+      setSalesmen(prev => prev.map(s => s.id === id ? { ...s, active: newStatus } : s));
+      const res = await fetch(`${api.baseURL}/api/admin/salesman`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, active: newStatus })
+      });
+      if (!res.ok) throw new Error('Failed to update status');
+      Toast.show({ type: 'success', text1: 'Status Updated' });
+    } catch (err) {
+      setSalesmen(prev => prev.map(s => s.id === id ? { ...s, active: currentStatus } : s));
       Toast.show({ type: 'error', text1: 'Error', text2: err.message });
     }
   };
@@ -81,9 +98,7 @@ export default function AdminManageSalesmen() {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
               });
-              const data = await res.json();
-              if (!res.ok) throw new Error(data.error || 'Delete failed');
-              
+              if (!res.ok) throw new Error('Delete failed');
               setSalesmen(prev => prev.filter(s => s.id !== id));
               Toast.show({ type: 'success', text1: `${name} deleted successfully` });
             } catch (err) {
@@ -95,26 +110,46 @@ export default function AdminManageSalesmen() {
     );
   };
 
-  const handleAddSalesman = async () => {
-    if (!formData.name || !formData.companyName || !formData.phone || !formData.password) {
-      Toast.show({ type: 'error', text1: 'All fields are required' });
+  const openEditModal = (salesman) => {
+    setEditId(salesman.id);
+    setFormData({
+      name: salesman.name,
+      companyName: salesman.companyName,
+      phone: salesman.phone,
+      password: '', // blank unless changing
+      canUploadStock: salesman.canUploadStock || false,
+      active: salesman.active !== false // default true if undefined
+    });
+    setModalVisible(true);
+  };
+
+  const handleSaveSalesman = async () => {
+    if (!formData.name || !formData.companyName || !formData.phone || (!editId && !formData.password)) {
+      Toast.show({ type: 'error', text1: 'Required fields missing' });
       return;
     }
     
     setSubmitting(true);
     try {
+      const payload = { ...formData };
+      if (editId) {
+        payload.id = editId;
+        if (!payload.password) delete payload.password; // don't update password if empty
+      }
+      
       const res = await fetch(`${api.baseURL}/api/admin/salesman`, {
-        method: 'POST',
+        method: editId ? 'PUT' : 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
       
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to create salesman');
+      if (!res.ok) throw new Error(data.error || 'Failed to save salesman');
       
-      Toast.show({ type: 'success', text1: 'Salesman added successfully!' });
+      Toast.show({ type: 'success', text1: `Salesman ${editId ? 'updated' : 'added'} successfully!` });
       setModalVisible(false);
-      setFormData({ name: '', companyName: '', phone: '', password: '', canUploadStock: false });
+      setFormData({ name: '', companyName: '', phone: '', password: '', canUploadStock: false, active: true });
+      setEditId(null);
       loadSalesmen(token);
     } catch (err) {
       Toast.show({ type: 'error', text1: 'Error', text2: err.message });
@@ -123,24 +158,95 @@ export default function AdminManageSalesmen() {
     }
   };
 
+  const handleBulkUpload = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['text/csv', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+        copyToCacheDirectory: true
+      });
+      
+      if (result.canceled) return;
+      
+      Toast.show({ type: 'info', text1: 'Parsing file...' });
+      const asset = result.assets[0];
+      const fileBase64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
+      
+      const wb = XLSX.read(fileBase64, { type: 'base64' });
+      const wsname = wb.SheetNames[0];
+      const ws = wb.Sheets[wsname];
+      const jsonData = XLSX.utils.sheet_to_json(ws);
+      
+      if (jsonData.length === 0) throw new Error('File is empty');
+      
+      const payload = jsonData.map(row => ({
+        name: row.name || row.Name,
+        companyName: row.companyName || row.company || row.Company,
+        phone: row.phone || row.Phone,
+        password: row.password || row.Password,
+        canUploadStock: row.canUploadStock === 'true' || row.canUploadStock === true,
+      })).filter(r => r.name && r.phone && r.password);
+      
+      if (payload.length === 0) throw new Error('No valid rows found. Check column headers.');
+
+      const res = await fetch(`${api.baseURL}/api/admin/salesman/bulk`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ salesmen: payload })
+      });
+      if (!res.ok) throw new Error('Bulk upload failed');
+      
+      Toast.show({ type: 'success', text1: `Uploaded ${payload.length} salesmen successfully` });
+      loadSalesmen(token);
+    } catch (err) {
+      Toast.show({ type: 'error', text1: 'Upload failed', text2: err.message });
+    }
+  };
+
+  const total = salesmen.length;
+  const active = salesmen.filter(s => s.active !== false).length;
+  const inactive = total - active;
+
   const renderItem = ({ item }) => (
     <View style={styles.card}>
       <View style={styles.cardInfo}>
         <Text style={styles.name}>{item.name}</Text>
         <Text style={styles.company}>{item.companyName} ({item.phone})</Text>
+        <View style={styles.badgesRow}>
+          <Text style={[styles.badge, item.active !== false ? styles.badgeActive : styles.badgeInactive]}>
+            {item.active !== false ? 'Active' : 'Inactive'}
+          </Text>
+        </View>
       </View>
-      <View style={styles.toggleContainer}>
-        <Text style={styles.toggleLabel}>Upload Stock</Text>
-        <Switch
-          value={item.canUploadStock}
-          onValueChange={() => toggleUploadPermission(item.id, item.canUploadStock)}
-          trackColor={{ false: colors.border, true: colors.primaryLight }}
-          thumbColor={item.canUploadStock ? colors.primary : colors.white}
-        />
+      
+      <View style={styles.togglesWrapper}>
+        <View style={styles.toggleContainer}>
+          <Text style={styles.toggleLabel}>Upload Stock</Text>
+          <Switch
+            value={item.canUploadStock}
+            onValueChange={() => toggleUploadPermission(item.id, item.canUploadStock)}
+            trackColor={{ false: colors.border, true: colors.primaryLight }}
+            thumbColor={item.canUploadStock ? colors.primary : colors.bgPrimary}
+          />
+        </View>
+        <View style={styles.toggleContainer}>
+          <Text style={styles.toggleLabel}>Active</Text>
+          <Switch
+            value={item.active !== false}
+            onValueChange={() => toggleActiveStatus(item.id, item.active !== false)}
+            trackColor={{ false: colors.border, true: colors.primaryLight }}
+            thumbColor={item.active !== false ? colors.primary : colors.bgPrimary}
+          />
+        </View>
       </View>
-      <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id, item.name)}>
-        <Text style={styles.deleteText}>Delete</Text>
-      </TouchableOpacity>
+
+      <View style={styles.cardActions}>
+        <TouchableOpacity style={styles.editBtn} onPress={() => openEditModal(item)}>
+          <Text style={styles.editText}>Edit</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id, item.name)}>
+          <Text style={styles.deleteText}>Delete</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -148,9 +254,34 @@ export default function AdminManageSalesmen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Manage Salesmen</Text>
+      </View>
+
+      {/* Stats Grid */}
+      <View style={styles.statsGrid}>
+        <View style={styles.statBox}>
+          <Text style={styles.statNumber}>{total}</Text>
+          <Text style={styles.statLabel}>Total</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statNumber}>{active}</Text>
+          <Text style={styles.statLabel}>Active</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statNumber}>{inactive}</Text>
+          <Text style={styles.statLabel}>Deactivated</Text>
+        </View>
+      </View>
+
+      <View style={styles.headerActions}>
+        <TouchableOpacity style={styles.bulkUploadBtn} onPress={handleBulkUpload}>
+          <Text style={styles.bulkUploadText}>📥 Bulk Upload CSV</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.addBtn} onPress={() => { setEditId(null); setFormData({ name: '', companyName: '', phone: '', password: '', canUploadStock: false, active: true }); setModalVisible(true); }}>
+          <Text style={styles.addBtnText}>➕ Add New</Text>
+        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -167,16 +298,11 @@ export default function AdminManageSalesmen() {
         />
       )}
 
-      {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
-        <Text style={styles.fabIcon}>+</Text>
-      </TouchableOpacity>
-
-      {/* Add Modal */}
+      {/* Add/Edit Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add New Salesman</Text>
+            <Text style={styles.modalTitle}>{editId ? 'Edit Salesman' : 'Add New Salesman'}</Text>
             
             <TextInput
               style={styles.input}
@@ -199,14 +325,14 @@ export default function AdminManageSalesmen() {
             />
             <TextInput
               style={styles.input}
-              placeholder="Password"
+              placeholder={editId ? "Leave blank to keep password" : "Password"}
               secureTextEntry
               value={formData.password}
               onChangeText={t => setFormData({...formData, password: t})}
             />
 
             <View style={styles.modalSwitchRow}>
-              <Text>Allow Stock Upload?</Text>
+              <Text style={styles.switchText}>Allow Stock Upload?</Text>
               <Switch
                 value={formData.canUploadStock}
                 onValueChange={v => setFormData({...formData, canUploadStock: v})}
@@ -217,8 +343,8 @@ export default function AdminManageSalesmen() {
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)} disabled={submitting}>
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={handleAddSalesman} disabled={submitting}>
-                {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Save</Text>}
+              <TouchableOpacity style={styles.saveBtn} onPress={handleSaveSalesman} disabled={submitting}>
+                {submitting ? <ActivityIndicator color={colors.white} /> : <Text style={styles.saveText}>Save</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -229,30 +355,54 @@ export default function AdminManageSalesmen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: { padding: 16, backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row', alignItems: 'center' },
-  backButton: { marginRight: 16, padding: 8 },
-  backButtonText: { color: colors.primary, fontSize: 16, fontWeight: 'bold' },
-  title: { fontSize: 20, fontWeight: 'bold', color: colors.textDark },
-  card: { backgroundColor: colors.white, padding: 16, borderRadius: 8, marginBottom: 12, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
-  cardInfo: { flex: 1 },
-  name: { fontSize: 16, fontWeight: 'bold', color: colors.textDark },
-  company: { fontSize: 14, color: colors.textMuted, marginTop: 4 },
-  toggleContainer: { alignItems: 'center', marginLeft: 16 },
-  toggleLabel: { fontSize: 12, color: colors.textMuted, marginBottom: 4 },
-  deleteBtn: { marginLeft: 16, padding: 8, backgroundColor: '#fef2f2', borderRadius: 8 },
-  deleteText: { color: colors.danger, fontWeight: 'bold', fontSize: 12 },
-  emptyText: { textAlign: 'center', color: colors.textMuted, marginTop: 40, fontSize: 16 },
-  fab: { position: 'absolute', bottom: 30, right: 30, backgroundColor: colors.primary, width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4 },
-  fabIcon: { color: colors.white, fontSize: 32, fontWeight: 'bold', marginTop: -4 },
+  container: { flex: 1, backgroundColor: colors.bgPrimary },
+  header: { padding: 16, backgroundColor: colors.bgCard, borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row', alignItems: 'center' },
+  backButton: { marginRight: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: colors.bgPrimary, justifyContent: 'center', alignItems: 'center' },
+  backButtonText: { color: colors.textMain, fontSize: 20, fontFamily: 'Inter_700Bold' },
+  title: { fontSize: 20, fontFamily: 'Inter_700Bold', color: colors.primary },
+  
+  statsGrid: { flexDirection: 'row', padding: 16, gap: 12, backgroundColor: colors.bgCard, borderBottomWidth: 1, borderBottomColor: colors.border },
+  statBox: { flex: 1, backgroundColor: colors.bgPrimary, padding: 12, borderRadius: radius.sm, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+  statNumber: { fontSize: 20, fontFamily: 'Inter_700Bold', color: colors.primary },
+  statLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: colors.textMuted },
+  
+  headerActions: { flexDirection: 'row', padding: 16, gap: 12 },
+  bulkUploadBtn: { flex: 1, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border, padding: 12, borderRadius: radius.sm, alignItems: 'center' },
+  bulkUploadText: { fontFamily: 'Inter_600SemiBold', color: colors.textMain },
+  addBtn: { flex: 1, backgroundColor: colors.primary, padding: 12, borderRadius: radius.sm, alignItems: 'center' },
+  addBtnText: { fontFamily: 'Inter_700Bold', color: colors.white },
+
+  card: { backgroundColor: colors.bgCard, padding: 16, borderRadius: radius.md, marginBottom: 12, ...shadow.sm },
+  cardInfo: { marginBottom: 12 },
+  name: { fontSize: 18, fontFamily: 'Inter_700Bold', color: colors.textMain },
+  company: { fontSize: 14, fontFamily: 'Inter_400Regular', color: colors.textMuted, marginTop: 4 },
+  
+  badgesRow: { flexDirection: 'row', marginTop: 8 },
+  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.full, fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  badgeActive: { backgroundColor: colors.primaryLight, color: colors.primary },
+  badgeInactive: { backgroundColor: colors.dangerLight, color: colors.danger },
+
+  togglesWrapper: { flexDirection: 'row', gap: 24, marginBottom: 16, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 },
+  toggleContainer: { alignItems: 'flex-start' },
+  toggleLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: colors.textMuted, marginBottom: 4 },
+  
+  cardActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+  editBtn: { paddingVertical: 8, paddingHorizontal: 16, backgroundColor: colors.bgPrimary, borderRadius: radius.sm },
+  editText: { color: colors.textMain, fontFamily: 'Inter_600SemiBold' },
+  deleteBtn: { paddingVertical: 8, paddingHorizontal: 16, backgroundColor: colors.dangerLight, borderRadius: radius.sm },
+  deleteText: { color: colors.danger, fontFamily: 'Inter_600SemiBold' },
+  
+  emptyText: { textAlign: 'center', color: colors.textMuted, marginTop: 40, fontFamily: 'Inter_400Regular', fontSize: 16 },
+  
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
-  modalContent: { backgroundColor: colors.white, padding: 24, borderRadius: 12, elevation: 5 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, color: colors.textDark },
-  input: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 16 },
+  modalContent: { backgroundColor: colors.bgCard, padding: 24, borderRadius: radius.lg, ...shadow.lg },
+  modalTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', marginBottom: 20, color: colors.textMain },
+  input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 12, marginBottom: 16, fontSize: 16, fontFamily: 'Inter_400Regular', backgroundColor: colors.bgPrimary },
   modalSwitchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  switchText: { fontFamily: 'Inter_600SemiBold', color: colors.textMain },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
-  cancelBtn: { padding: 12, borderRadius: 8 },
-  cancelText: { color: colors.textMuted, fontWeight: 'bold', fontSize: 16 },
-  saveBtn: { backgroundColor: colors.primary, padding: 12, borderRadius: 8, minWidth: 80, alignItems: 'center' },
-  saveText: { color: colors.white, fontWeight: 'bold', fontSize: 16 }
+  cancelBtn: { padding: 12, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border },
+  cancelText: { color: colors.textMuted, fontFamily: 'Inter_600SemiBold', fontSize: 16 },
+  saveBtn: { backgroundColor: colors.primary, padding: 12, borderRadius: radius.sm, minWidth: 80, alignItems: 'center' },
+  saveText: { color: colors.white, fontFamily: 'Inter_700Bold', fontSize: 16 }
 });

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { colors } from '../constants/colors';
+import { colors, radius, shadow } from '../constants/colors';
 import { api } from '../services/api';
 import { saveToken } from '../services/auth';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,11 +10,12 @@ import Toast from 'react-native-toast-message';
 export default function UnifiedLogin() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const [role, setRole] = useState('salesman'); // 'retailer', 'salesman', 'admin'
+  const [role, setRole] = useState('salesman'); // 'salesman', 'admin'
   const [usernameOrPhone, setUsernameOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     // Wake DB silently exactly once on mount
@@ -33,21 +34,15 @@ export default function UnifiedLogin() {
   }, [params.logout]);
 
   const handleLogin = async () => {
-    // Validation
-    if (role === 'retailer') {
-      if (!usernameOrPhone || usernameOrPhone.length !== 10 || !/^\d+$/.test(usernameOrPhone)) {
-        Toast.show({ type: 'error', text1: 'Phone number must be exactly 10 digits.', position: 'bottom' });
-        return;
-      }
-    } else if (role === 'admin' || role === 'salesman') {
-      if (!usernameOrPhone) {
-        Toast.show({ type: 'error', text1: `${role === 'admin' ? 'Admin' : 'Salesman'} username/phone is required.`, position: 'bottom' });
-        return;
-      }
+    setErrorMsg('');
+    
+    if (!usernameOrPhone) {
+      setErrorMsg(`${role === 'admin' ? 'Admin' : 'Salesman'} username/phone is required.`);
+      return;
     }
 
-    if (role !== 'retailer' && !password) {
-      Toast.show({ type: 'error', text1: 'Password is required.', position: 'bottom' });
+    if (!password) {
+      setErrorMsg('Password is required.');
       return;
     }
 
@@ -67,12 +62,6 @@ export default function UnifiedLogin() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ phone: usernameOrPhone, password })
         });
-      } else if (role === 'retailer') {
-        res = await fetch(`${api.baseURL}/api/retailer/auth`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: usernameOrPhone })
-        });
       }
 
       const data = await res.json();
@@ -83,7 +72,7 @@ export default function UnifiedLogin() {
 
       Toast.show({
         type: 'success',
-        text1: `Welcome back, ${role === 'admin' ? 'Admin' : role === 'salesman' ? 'Salesman' : 'Retailer'}!`,
+        text1: `Welcome back, ${role === 'admin' ? 'Admin' : 'Salesman'}!`,
         position: 'top'
       });
 
@@ -94,19 +83,15 @@ export default function UnifiedLogin() {
       } else if (role === 'salesman') {
         await saveToken('salesman_token', data.token);
         router.replace('/salesman/dashboard');
-      } else if (role === 'retailer') {
-        await saveToken('retailer_token', data.token);
-        router.replace('/retailer/browse');
       }
 
     } catch (err) {
       setLoading(false);
-      Toast.show({ type: 'error', text1: err.message, position: 'bottom' });
+      setErrorMsg(err.message);
     }
   };
 
   const getRoleLabel = () => {
-    if (role === 'retailer') return 'Retailer';
     if (role === 'salesman') return 'Salesman';
     return 'Admin';
   };
@@ -116,62 +101,58 @@ export default function UnifiedLogin() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>VPD Order System</Text>
-        <Text style={styles.subtitle}>Select role and sign in to continue.</Text>
+        <Text style={styles.subtitle}>Select role and sign in to continue</Text>
       </View>
 
-      {/* 3-Way Role Selector */}
-      <View style={styles.pillContainer}>
+      {/* 2-Way Segmented Control */}
+      <View style={styles.segmentedControl}>
         <TouchableOpacity 
-          style={[styles.pillButton, role === 'retailer' && styles.pillActive]}
-          onPress={() => setRole('retailer')}
-        >
-          <Text style={[styles.pillText, role === 'retailer' && styles.pillTextActive]}>Retailer</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.pillButton, role === 'salesman' && styles.pillActive]}
+          style={[styles.segmentButton, role === 'salesman' && styles.segmentActive]}
           onPress={() => setRole('salesman')}
         >
-          <Text style={[styles.pillText, role === 'salesman' && styles.pillTextActive]}>Salesman</Text>
+          <Text style={[styles.segmentText, role === 'salesman' && styles.segmentTextActive]}>💼 Salesman</Text>
         </TouchableOpacity>
         <TouchableOpacity 
-          style={[styles.pillButton, role === 'admin' && styles.pillActive]}
+          style={[styles.segmentButton, role === 'admin' && styles.segmentActive]}
           onPress={() => setRole('admin')}
         >
-          <Text style={[styles.pillText, role === 'admin' && styles.pillTextActive]}>Admin</Text>
+          <Text style={[styles.segmentText, role === 'admin' && styles.segmentTextActive]}>🛡️ Admin</Text>
         </TouchableOpacity>
       </View>
 
       {/* Dynamic Form */}
       <View style={styles.formCard}>
+        {errorMsg ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{errorMsg}</Text>
+          </View>
+        ) : null}
+
         <Text style={styles.label}>
           {role === 'admin' ? 'Username' : 'WhatsApp Phone Number'}
         </Text>
         <TextInput
           style={styles.input}
-          placeholder={role === 'retailer' ? "Enter 10-digit phone number" : "Enter username/phone"}
+          placeholder="Enter username/phone"
           value={usernameOrPhone}
           onChangeText={setUsernameOrPhone}
-          keyboardType={role === 'retailer' ? "phone-pad" : "default"}
+          keyboardType={role === 'salesman' ? "phone-pad" : "default"}
           autoCapitalize="none"
         />
 
-        {role !== 'retailer' && (
-          <>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.passwordContainer}>
-              <TextInput
-                style={styles.passwordInput}
-                placeholder="Enter password"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-              />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
-                <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={24} color={colors.primary} />
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
+        <Text style={styles.label}>Password</Text>
+        <View style={styles.passwordContainer}>
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Enter password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+          />
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+            <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={24} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity 
           style={[styles.submitButton, loading && styles.submitDisabled]}
@@ -192,7 +173,7 @@ export default function UnifiedLogin() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.bgPrimary,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -202,84 +183,93 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   title: {
+    fontFamily: 'Inter_700Bold',
     fontSize: 28,
-    fontWeight: '900',
     color: colors.primary,
     marginBottom: 8,
   },
   subtitle: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 16,
     color: colors.textMuted,
   },
-  pillContainer: {
+  segmentedControl: {
     flexDirection: 'row',
-    backgroundColor: '#e2e8f0',
-    borderRadius: 30,
+    backgroundColor: colors.bgPrimary,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.md,
     padding: 4,
     marginBottom: 32,
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 440,
   },
-  pillButton: {
+  segmentButton: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 26,
+    borderRadius: radius.sm,
     alignItems: 'center',
   },
-  pillActive: {
-    backgroundColor: colors.white,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+  segmentActive: {
+    backgroundColor: colors.bgCard,
+    ...shadow.sm,
   },
-  pillText: {
+  segmentText: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
     color: colors.textMuted,
-    fontWeight: '600',
   },
-  pillTextActive: {
+  segmentTextActive: {
     color: colors.primary,
-    fontWeight: 'bold',
   },
   formCard: {
     width: '100%',
-    maxWidth: 400,
-    backgroundColor: colors.white,
+    maxWidth: 440,
+    backgroundColor: colors.bgCard,
     padding: 24,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
+    borderRadius: radius.lg,
+    ...shadow.lg,
+  },
+  errorBox: {
+    backgroundColor: colors.dangerLight,
+    borderColor: colors.danger,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorText: {
+    fontFamily: 'Inter_600SemiBold',
+    color: colors.danger,
+    fontSize: 14,
   },
   label: {
+    fontFamily: 'Inter_700Bold',
     fontSize: 14,
-    fontWeight: 'bold',
-    color: colors.textDark,
+    color: colors.textMain,
     marginBottom: 8,
   },
   input: {
+    fontFamily: 'Inter_400Regular',
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     padding: 14,
     fontSize: 16,
     marginBottom: 20,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.bgPrimary,
   },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
-    backgroundColor: '#f8fafc',
+    borderRadius: radius.sm,
+    backgroundColor: colors.bgPrimary,
     marginBottom: 24,
   },
   passwordInput: {
+    fontFamily: 'Inter_400Regular',
     flex: 1,
     padding: 14,
     fontSize: 16,
@@ -290,16 +280,16 @@ const styles = StyleSheet.create({
   submitButton: {
     backgroundColor: colors.primary,
     padding: 16,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     alignItems: 'center',
     width: '100%',
   },
   submitDisabled: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.grayOut,
   },
   submitText: {
+    fontFamily: 'Inter_700Bold',
     color: colors.white,
     fontSize: 16,
-    fontWeight: 'bold',
   }
 });
