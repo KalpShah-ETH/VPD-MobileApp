@@ -123,6 +123,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
     marginTop: 2,
+  },
   stockBadge: {
     backgroundColor: colors.primaryLight,
     paddingHorizontal: 12,

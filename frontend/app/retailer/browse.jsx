@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, ImageBackground, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../../constants/colors';
 import { api } from '../../services/api';
 import { getToken, removeToken } from '../../services/auth';
-import { useFocusEffect } from '@react-navigation/native';
 import { useCallback } from 'react';
 
 export default function RetailerBrowse() {
@@ -92,9 +91,22 @@ export default function RetailerBrowse() {
     return () => clearTimeout(debounceTimer.current);
   }, [search]);
 
-  const handleLogout = async () => {
-    await removeToken('retailer_token');
-    router.replace('/');
+  const handleLogout = () => {
+    Alert.alert(
+      "Confirm Logout",
+      "Are you sure you want to logout?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Logout", 
+          style: "destructive",
+          onPress: async () => {
+            await removeToken('retailer_token');
+            router.replace('/?logout=true');
+          }
+        }
+      ]
+    );
   };
 
   const handleAddToCart = async (item) => {

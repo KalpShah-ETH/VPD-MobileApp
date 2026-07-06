@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import { useRouter } from 'expo-router';
 import { colors } from '../../constants/colors';
 import { getToken } from '../../services/auth';
@@ -15,7 +17,7 @@ export default function AdminUploadStock() {
   const pickDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['text/csv', 'application/vnd.ms-excel'],
+        type: ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
         copyToCacheDirectory: true,
       });
 
@@ -29,7 +31,7 @@ export default function AdminUploadStock() {
 
   const handleUpload = async () => {
     if (!file) {
-      Alert.alert('Error', 'Please select a CSV file first');
+      Alert.alert('Error', 'Please select a CSV or XLSX file first');
       return;
     }
 
@@ -37,65 +39,59 @@ export default function AdminUploadStock() {
     try {
       const token = await getToken('admin_token');
       
-      // Read file text
-      const response = await fetch(file.uri);
-      const text = await response.text();
+      let rows = [];
 
-      // Parse CSV
-      Papa.parse(text, {
-        header: true,
-        skipEmptyLines: true,
-        complete: async (results) => {
-          const rows = results.data;
-          
-          // Map to API format (mfg, name, pack, quantity)
-          const items = rows.map(row => ({
-            name: row['item name'] || row['name'] || row['Name'],
-            mfg: row['mfg'] || row['Mfg'],
-            pack: row['pack'] || row['Pack'],
-            quantity: row['qty'] || row['quantity'] || row['Qty']
-          })).filter(i => i.name && i.quantity !== undefined);
+      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+        // Read as base64 for xlsx parsing
+        const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.Base64 });
+        const workbook = XLSX.read(base64, { type: 'base64' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        rows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+      } else {
+        // Assume CSV
+        const response = await fetch(file.uri);
+        const text = await response.text();
+        const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+        rows = parsed.data;
+      }
 
-          if (items.length === 0) {
-            setLoading(false);
-            Alert.alert('Error', 'No valid items found in the CSV. Make sure headers are correct (item name, mfg, pack, qty).');
-            return;
-          }
+      // Map to API format (mfg, name, pack, quantity)
+      const items = rows.map(row => ({
+        name: row['item name'] || row['name'] || row['Name'] || row['ITEM NAME'] || '',
+        mfg: row['mfg'] || row['Mfg'] || row['MFG'] || '',
+        pack: row['pack'] || row['Pack'] || row['PACK'] || '',
+        quantity: row['qty'] || row['quantity'] || row['Qty'] || row['QTY'] || 0
+      })).filter(i => i.name && i.quantity !== undefined && i.quantity !== "");
 
-          try {
-            // Post to backend
-            const res = await fetch(`${api.baseURL}/api/admin/salesman/bulk-stock`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ items, fileName: file.name })
-            });
-            
-            const data = await res.json();
-            
-            if (res.ok) {
-              setLoading(false);
-              Alert.alert(
-                'Success', 
-                `Global stock updated successfully!\nInserted: ${data.inserted}\nSkipped (Duplicates): ${data.skipped}`,
-                [{ text: 'OK', onPress: () => router.back() }]
-              );
-            } else {
-              setLoading(false);
-              Alert.alert('Upload Failed', data.error || 'Unknown error');
-            }
-          } catch (apiErr) {
-            setLoading(false);
-            Alert.alert('Upload Failed', apiErr.message);
-          }
+      if (items.length === 0) {
+        setLoading(false);
+        Alert.alert('Error', 'No valid items found. Make sure headers are correct (item name, mfg, pack, qty).');
+        return;
+      }
+
+      const res = await fetch(`${api.baseURL}/api/admin/salesman/bulk-stock`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
-        error: (err) => {
-          setLoading(false);
-          Alert.alert('Parse Error', err.message);
-        }
+        body: JSON.stringify({ items, fileName: file.name })
       });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        setLoading(false);
+        Alert.alert(
+          'Success', 
+          `Global stock updated successfully!\nInserted: ${data.inserted}\nSkipped (Duplicates): ${data.skipped}`,
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      } else {
+        setLoading(false);
+        Alert.alert('Upload Failed', data.error || 'Unknown error');
+      }
     } catch (error) {
       setLoading(false);
       Alert.alert('Upload Failed', error.message);

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors } from '../../constants/colors';
 import { getToken, removeToken } from '../../services/auth';
@@ -24,9 +24,22 @@ export default function SalesmanDashboard() {
     setupNotifications();
   }, []);
 
-  const handleLogout = async () => {
-    await removeToken('salesman_token');
-    router.replace('/');
+  const handleLogout = () => {
+    Alert.alert(
+      "Confirm Logout",
+      "Are you sure you want to logout?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Logout", 
+          style: "destructive",
+          onPress: async () => {
+            await removeToken('salesman_token');
+            router.replace('/?logout=true');
+          }
+        }
+      ]
+    );
   };
 
   const header = (

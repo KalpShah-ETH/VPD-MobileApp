@@ -1,17 +1,23 @@
 import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
+import { useRouter } from 'expo-router';
 import { colors } from '../../constants/colors';
 import { getToken } from '../../services/auth';
+import { api } from '../../services/api';
 
 export default function SalesmanUpload() {
+  const router = useRouter();
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const pickDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['text/csv', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'],
+        type: ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
         copyToCacheDirectory: true,
       });
 
@@ -25,7 +31,7 @@ export default function SalesmanUpload() {
 
   const handleUpload = async () => {
     if (!file) {
-      Alert.alert('Error', 'Please select a CSV or Excel file first');
+      Alert.alert('Error', 'Please select a CSV or XLSX file first');
       return;
     }
 
@@ -33,29 +39,56 @@ export default function SalesmanUpload() {
     try {
       const token = await getToken('salesman_token');
       
-      const formData = new FormData();
-      formData.append('file', {
-        uri: file.uri,
-        name: file.name,
-        type: file.mimeType || 'text/csv'
-      });
+      let rows = [];
 
-      // API route for stock upload
-      // const res = await fetch('YOUR_API_URL/api/salesman/stock/bulk', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Authorization': `Bearer ${token}`
-      //   },
-      //   body: formData
-      // });
-      
-      // Simulating API success for now
-      setTimeout(() => {
+      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+        const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.Base64 });
+        const workbook = XLSX.read(base64, { type: 'base64' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        rows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+      } else {
+        const response = await fetch(file.uri);
+        const text = await response.text();
+        const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+        rows = parsed.data;
+      }
+
+      const items = rows.map(row => ({
+        name: row['item name'] || row['name'] || row['Name'] || row['ITEM NAME'] || '',
+        mfg: row['mfg'] || row['Mfg'] || row['MFG'] || '',
+        pack: row['pack'] || row['Pack'] || row['PACK'] || '',
+        quantity: row['qty'] || row['quantity'] || row['Qty'] || row['QTY'] || 0
+      })).filter(i => i.name && i.quantity !== undefined && i.quantity !== "");
+
+      if (items.length === 0) {
         setLoading(false);
-        Alert.alert('Success', 'Stock catalogue updated successfully!');
-        setFile(null);
-      }, 1500);
+        Alert.alert('Error', 'No valid items found. Make sure headers are correct (item name, mfg, pack, qty).');
+        return;
+      }
 
+      const res = await fetch(`${api.baseURL}/api/salesman/stock/bulk`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ items, fileName: file.name })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        setLoading(false);
+        Alert.alert(
+          'Success', 
+          `Stock updated successfully!\nInserted: ${data.inserted}\nSkipped: ${data.skipped}`,
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      } else {
+        setLoading(false);
+        Alert.alert('Upload Failed', data.error || 'Unknown error');
+      }
     } catch (error) {
       setLoading(false);
       Alert.alert('Upload Failed', error.message);
@@ -65,7 +98,7 @@ export default function SalesmanUpload() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Upload Stock Data</Text>
-      <Text style={styles.subtitle}>Select a CSV or Excel file to update your inventory.</Text>
+      <Text style={styles.subtitle}>Select a CSV or XLSX file to update your inventory.</Text>
 
       <View style={styles.card}>
         {file ? (

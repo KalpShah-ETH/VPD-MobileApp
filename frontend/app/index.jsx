@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { colors } from '../constants/colors';
 import { api } from '../services/api';
 import { saveToken } from '../services/auth';
+import { Ionicons } from '@expo/vector-icons';
+import Toast from 'react-native-toast-message';
 
 export default function UnifiedLogin() {
   const router = useRouter();
@@ -13,56 +15,39 @@ export default function UnifiedLogin() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState(null);
-  const [showToast, setShowToast] = useState(false);
-  const fadeAnim = new Animated.Value(0);
 
   useEffect(() => {
-    // Wake DB silently
+    // Wake DB silently exactly once on mount
     fetch(`${api.baseURL}/api/ping`).catch(() => {});
-    
+  }, []);
+
+  useEffect(() => {
     // Check for logout param
     if (params.logout === 'true') {
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      Toast.show({
+        type: 'success',
+        text1: 'Successfully logged out',
+        position: 'bottom'
+      });
     }
-  }, [params]);
-
-  const showError = (msg) => {
-    setErrorMsg(msg);
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      setTimeout(() => {
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }).start(() => setErrorMsg(null));
-      }, 3000);
-    });
-  };
+  }, [params.logout]);
 
   const handleLogin = async () => {
-    setErrorMsg(null);
-
     // Validation
     if (role === 'retailer') {
       if (!usernameOrPhone || usernameOrPhone.length !== 10 || !/^\d+$/.test(usernameOrPhone)) {
-        showError('Phone number must be exactly 10 digits.');
+        Toast.show({ type: 'error', text1: 'Phone number must be exactly 10 digits.', position: 'bottom' });
         return;
       }
     } else if (role === 'admin' || role === 'salesman') {
       if (!usernameOrPhone) {
-        showError(`${role === 'admin' ? 'Admin' : 'Salesman'} username/phone is required.`);
+        Toast.show({ type: 'error', text1: `${role === 'admin' ? 'Admin' : 'Salesman'} username/phone is required.`, position: 'bottom' });
         return;
       }
     }
 
     if (role !== 'retailer' && !password) {
-      showError('Password is required.');
+      Toast.show({ type: 'error', text1: 'Password is required.', position: 'bottom' });
       return;
     }
 
@@ -96,6 +81,12 @@ export default function UnifiedLogin() {
         throw new Error(data.error || 'Authentication failed');
       }
 
+      Toast.show({
+        type: 'success',
+        text1: `Welcome back, ${role === 'admin' ? 'Admin' : role === 'salesman' ? 'Salesman' : 'Retailer'}!`,
+        position: 'top'
+      });
+
       // Save token and navigate
       if (role === 'admin') {
         await saveToken('admin_token', data.token);
@@ -110,7 +101,7 @@ export default function UnifiedLogin() {
 
     } catch (err) {
       setLoading(false);
-      showError(err.message);
+      Toast.show({ type: 'error', text1: err.message, position: 'bottom' });
     }
   };
 
@@ -132,30 +123,23 @@ export default function UnifiedLogin() {
       <View style={styles.pillContainer}>
         <TouchableOpacity 
           style={[styles.pillButton, role === 'retailer' && styles.pillActive]}
-          onPress={() => { setRole('retailer'); setErrorMsg(null); }}
+          onPress={() => setRole('retailer')}
         >
-          <Text style={[styles.pillText, role === 'retailer' && styles.pillTextActive]}>🛍️ Retailer</Text>
+          <Text style={[styles.pillText, role === 'retailer' && styles.pillTextActive]}>Retailer</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.pillButton, role === 'salesman' && styles.pillActive]}
-          onPress={() => { setRole('salesman'); setErrorMsg(null); }}
+          onPress={() => setRole('salesman')}
         >
-          <Text style={[styles.pillText, role === 'salesman' && styles.pillTextActive]}>💼 Salesman</Text>
+          <Text style={[styles.pillText, role === 'salesman' && styles.pillTextActive]}>Salesman</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.pillButton, role === 'admin' && styles.pillActive]}
-          onPress={() => { setRole('admin'); setErrorMsg(null); }}
+          onPress={() => setRole('admin')}
         >
-          <Text style={[styles.pillText, role === 'admin' && styles.pillTextActive]}>🛡️ Admin</Text>
+          <Text style={[styles.pillText, role === 'admin' && styles.pillTextActive]}>Admin</Text>
         </TouchableOpacity>
       </View>
-
-      {/* Error Box */}
-      {errorMsg && (
-        <Animated.View style={[styles.errorBox, { opacity: fadeAnim }]}>
-          <Text style={styles.errorText}>{errorMsg}</Text>
-        </Animated.View>
-      )}
 
       {/* Dynamic Form */}
       <View style={styles.formCard}>
@@ -183,7 +167,7 @@ export default function UnifiedLogin() {
                 secureTextEntry={!showPassword}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
-                <Text style={styles.eyeText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={24} color={colors.primary} />
               </TouchableOpacity>
             </View>
           </>
@@ -201,22 +185,6 @@ export default function UnifiedLogin() {
           )}
         </TouchableOpacity>
       </View>
-
-      {/* Retailer Info Box */}
-      {role === 'retailer' && (
-        <View style={styles.infoBox}>
-          <Text style={styles.infoText}>
-            Are you a Retailer? Retailers usually do not need a password. Please tap the unique private link sent to your phone via WhatsApp, or enter your registered phone number above to login directly.
-          </Text>
-        </View>
-      )}
-
-      {/* Logout Toast */}
-      {showToast && (
-        <View style={styles.toast}>
-          <Text style={styles.toastText}>✓ Successfully logged out</Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -224,7 +192,7 @@ export default function UnifiedLogin() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc', // light gray/white background
+    backgroundColor: '#f8fafc',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -236,7 +204,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '900',
-    color: colors.primary, // bold blue text
+    color: colors.primary,
     marginBottom: 8,
   },
   subtitle: {
@@ -245,7 +213,7 @@ const styles = StyleSheet.create({
   },
   pillContainer: {
     flexDirection: 'row',
-    backgroundColor: '#e2e8f0', // transparent/muted pill background
+    backgroundColor: '#e2e8f0',
     borderRadius: 30,
     padding: 4,
     marginBottom: 32,
@@ -274,21 +242,6 @@ const styles = StyleSheet.create({
   pillTextActive: {
     color: colors.primary,
     fontWeight: 'bold',
-  },
-  errorBox: {
-    width: '100%',
-    maxWidth: 400,
-    borderWidth: 1,
-    borderColor: colors.danger,
-    backgroundColor: '#fef2f2',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  errorText: {
-    color: colors.danger,
-    textAlign: 'center',
-    fontWeight: '600',
   },
   formCard: {
     width: '100%',
@@ -334,10 +287,6 @@ const styles = StyleSheet.create({
   eyeBtn: {
     padding: 14,
   },
-  eyeText: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
   submitButton: {
     backgroundColor: colors.primary,
     padding: 16,
@@ -352,39 +301,5 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  infoBox: {
-    width: '100%',
-    maxWidth: 400,
-    marginTop: 24,
-    backgroundColor: '#eff6ff',
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-  },
-  infoText: {
-    color: '#1e3a8a',
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  toast: {
-    position: 'absolute',
-    bottom: 40,
-    backgroundColor: '#22c55e',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  toastText: {
-    color: colors.white,
-    fontWeight: 'bold',
-    fontSize: 14,
   }
 });

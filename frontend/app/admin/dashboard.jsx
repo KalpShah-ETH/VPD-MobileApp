@@ -1,5 +1,6 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import { removeToken } from '../../services/auth';
 import { colors } from '../../constants/colors';
 import DashboardLayout from '../../src/components/DashboardLayout';
 import DashboardCard from '../../src/components/DashboardCard';
@@ -8,8 +9,21 @@ export default function AdminDashboard() {
   const router = useRouter();
 
   const handleLogout = () => {
-    // TODO: Clear token logic
-    router.replace('/');
+    Alert.alert(
+      "Confirm Logout",
+      "Are you sure you want to logout?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Logout", 
+          style: "destructive",
+          onPress: async () => {
+            await removeToken('admin_token');
+            router.replace('/?logout=true');
+          }
+        }
+      ]
+    );
   };
 
   const header = (

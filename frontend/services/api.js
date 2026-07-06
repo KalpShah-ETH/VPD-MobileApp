@@ -1,5 +1,5 @@
 // Use your machine's local IP address or 10.0.2.2 for Android emulator testing
-const BASE_URL = 'http://10.0.2.2:3000';
+const BASE_URL = 'http://192.168.1.4:3000';
 
 export const api = {
   baseURL: BASE_URL,
