@@ -1,29 +1,46 @@
+// app/api/salesman/stock/bulk/route.js
 import { NextResponse } from 'next/server';
-import * as XLSX from 'xlsx';
 
 export async function POST(req) {
   try {
+    // 1. Get the clean JSON array from the frontend
     const body = await req.json();
-    const { base64Data } = body;
+    const { items, fileName } = body;
 
-    if (!base64Data) {
-      return NextResponse.json({ error: 'No file data provided' }, { status: 400 });
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return NextResponse.json({ error: 'No valid items provided' }, { status: 400 });
     }
 
-    const buffer = Buffer.from(base64Data, 'base64');
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
-    
-    if (!workbook.SheetNames.length) {
-      return NextResponse.json({ error: 'Excel file is empty' }, { status: 400 });
+    let inserted = 0;
+    let skipped = 0;
+
+    // 2. Loop through the items and save them to your database
+    for (const item of items) {
+      if (!item.name || isNaN(item.quantity)) {
+        skipped++;
+        continue;
+      }
+
+      // --- DATABASE LOGIC HERE ---
+      // Example: 
+      // await db.collection('stock').updateOne(
+      //   { name: item.name, mfg: item.mfg },
+      //   { $set: { pack: item.pack, quantity: item.quantity } },
+      //   { upsert: true }
+      // );
+
+      inserted++;
     }
 
-    const firstSheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[firstSheetName];
-    const rows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+    return NextResponse.json({
+      success: true,
+      inserted,
+      skipped,
+      fileName
+    });
 
-    return NextResponse.json({ data: rows });
-  } catch (err) {
-    console.error('Excel parsing error:', err);
-    return NextResponse.json({ error: 'Failed to parse Excel file' }, { status: 500 });
+  } catch (error) {
+    console.error('Bulk stock upload error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

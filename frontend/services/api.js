@@ -1,5 +1,5 @@
 // Use your machine's local IP address or 10.0.2.2 for Android emulator testing
-const BASE_URL = 'http://192.168.103.226:3000';
+const BASE_URL = 'http://192.168.1.7:3000';
 
 export const api = {
   baseURL: BASE_URL,
@@ -46,5 +46,10 @@ export const api = {
         Authorization: `Bearer ${token}`
       },
       body: JSON.stringify({ items })
+    }).then(res => res.json()),
+
+  adminOrders: (token) =>
+    fetch(`${BASE_URL}/api/admin/orders`, {
+      headers: { Authorization: `Bearer ${token}` }
     }).then(res => res.json()),
 };

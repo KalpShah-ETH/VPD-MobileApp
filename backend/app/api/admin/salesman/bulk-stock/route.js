@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import prisma from '@/lib/db';
 import { validateSession } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
+import * as XLSX from 'xlsx';
 
 async function checkAdminAuth() {
   const cookieStore = await cookies();
@@ -16,13 +17,9 @@ export async function POST(request) {
   }
 
   try {
-    const { items, fileName } = await request.json();
-    
-    if (!Array.isArray(items)) {
-      return NextResponse.json({ error: 'Invalid payload: items must be an array' }, { status: 400 });
-    }
+    console.log('[BACKEND] Received admin FormData upload');
 
-    // Get or create the special admin_global salesman
+    // 1. Get or create the special admin_global salesman
     let globalSalesman = await prisma.salesman.findUnique({
       where: { username: 'admin_global' }
     });
@@ -36,64 +33,111 @@ export async function POST(request) {
           phone: '0000000000',
           username: 'admin_global',
           passwordHash: dummyHash,
-          active: false // keep it inactive so it is not listed as a standalone company
+          active: false
         }
       });
     }
 
-    // 1. Delete all existing global stock items
+    // 2. Parse FormData
+    const formData = await request.formData();
+    const file = formData.get('file');
+    
+    if (!file) {
+      return NextResponse.json({ error: 'No file found in the upload.' }, { status: 400 });
+    }
+
+    const fileName = file.name || 'global_stock.xlsx';
+    console.log(`[BACKEND] Admin Processing file: ${fileName}, size: ${file.size} bytes`);
+
+    // 3. Convert file to buffer and parse with XLSX
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    
+    if (!workbook.SheetNames.length) {
+      return NextResponse.json({ error: 'Uploaded Excel/CSV file is empty' }, { status: 400 });
+    }
+
+    const firstSheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[firstSheetName];
+
+    // 4. Smart Parser to dynamically find headers
+    const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+    let headerRowIndex = -1;
+
+    for (let i = 0; i < rawRows.length; i++) {
+      const rowString = JSON.stringify(rawRows[i]).toUpperCase();
+      if (rowString.includes('MFG') || rowString.includes('ITEM NAM') || rowString.includes('QTY')) {
+        headerRowIndex = i;
+        break;
+      }
+    }
+
+    if (headerRowIndex === -1) {
+      return NextResponse.json({ error: 'Could not find valid column headers (MFG, ITEM NAM, QTY) in the file.' }, { status: 400 });
+    }
+
+    console.log('[BACKEND] Admin Smart Parser found headers at row:', headerRowIndex);
+    const rows = XLSX.utils.sheet_to_json(worksheet, { defval: "", range: headerRowIndex });
+
+    // 5. Delete all existing global stock items
     await prisma.stockItem.deleteMany({
       where: { salesmanId: globalSalesman.id }
     });
 
     const getUniquenessKey = (name, mfg, pack) => {
-      const cleanName = (name || '').trim().toLowerCase();
-      const cleanMfg = (mfg || '').trim().toLowerCase();
-      const cleanPack = (pack || '').trim().toLowerCase();
-      return `${cleanName}|${cleanMfg}|${cleanPack}`;
+      return `${(name || '').trim().toLowerCase()}|${(mfg || '').trim().toLowerCase()}|${(pack || '').trim().toLowerCase()}`;
     };
 
-    const currentKeys = new Set();
-
-    // 2. Filter new items
     const newItems = [];
+    const currentKeys = new Set();
     let skippedCount = 0;
 
-    for (const item of items) {
-      if (!item.name || item.quantity === undefined) {
-        continue;
-      }
-      const uniquenessKey = getUniquenessKey(item.name, item.mfg, item.pack);
+    for (const row of rows) {
+      const cleanRow = {};
+      Object.keys(row).forEach(key => {
+        cleanRow[key.trim().toUpperCase()] = row[key];
+      });
 
-      if (currentKeys.has(uniquenessKey)) {
+      const name = cleanRow['ITEM NAME'] || cleanRow['ITEM NAM'] || cleanRow['NAME'] || '';
+      const mfg = cleanRow['MFG'] || '';
+      const pack = cleanRow['PACK'] || '';
+      const quantityStr = cleanRow['QTY'] || cleanRow['QUANTITY'] || cleanRow['QUANTITY (BOX)'] || 0;
+      const quantity = parseInt(quantityStr);
+
+      if (!name || isNaN(quantity) || quantity < 0) {
         skippedCount++;
         continue;
       }
 
-      const numQty = parseInt(item.quantity);
-
-      if (isNaN(numQty) || numQty < 0) {
-        continue; // Skip invalid items
+      const key = getUniquenessKey(name, mfg, pack);
+      if (currentKeys.has(key)) {
+        skippedCount++;
+        continue;
       }
 
       newItems.push({
-        name: item.name.trim(),
-        quantity: numQty,
-        mfg: item.mfg ? item.mfg.trim() : null,
-        pack: item.pack ? item.pack.trim() : null,
+        name: name.trim(),
+        quantity: quantity,
+        mfg: mfg.trim(),
+        pack: pack.trim(),
         salesmanId: globalSalesman.id
       });
-      currentKeys.add(uniquenessKey);
+      currentKeys.add(key);
     }
 
-    // 3. Bulk insert for admin_global
-    if (newItems.length > 0) {
-      await prisma.stockItem.createMany({
-        data: newItems
-      });
+    console.log(`[BACKEND] Admin Mapping complete. Valid: ${newItems.length}, Skipped: ${skippedCount}`);
+
+    if (newItems.length === 0) {
+      return NextResponse.json({ error: 'No valid products could be mapped from this file.' }, { status: 400 });
     }
 
-    // 4. Log recent stock upload
+    // 6. Bulk insert
+    await prisma.stockItem.createMany({
+      data: newItems
+    });
+
+    // 7. Log recent upload
     try {
       const uploadsSetting = await prisma.setting.findUnique({
         where: { key: 'RECENT_STOCK_UPLOADS' }
@@ -109,10 +153,10 @@ export async function POST(request) {
       uploads.unshift({
         timestamp: new Date().toISOString(),
         adminUsername: admin.username,
-        filename: fileName || 'global_stock.xlsx',
+        filename: fileName,
         count: newItems.length
       });
-      uploads = uploads.slice(0, 10); // Keep last 10 entries
+      uploads = uploads.slice(0, 10);
 
       await prisma.setting.upsert({
         where: { key: 'RECENT_STOCK_UPLOADS' },
@@ -120,7 +164,7 @@ export async function POST(request) {
         create: { key: 'RECENT_STOCK_UPLOADS', value: JSON.stringify(uploads) }
       });
     } catch (logError) {
-      console.error('Failed to log stock upload:', logError);
+      console.error('Failed to log admin stock upload:', logError);
     }
 
     return NextResponse.json({
@@ -132,7 +176,7 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Admin global stock upload error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error while processing the file.' }, { status: 500 });
   }
 }
 
