@@ -13,44 +13,64 @@ export default function SalesmanUpload() {
 
   const pickDocument = async () => {
     try {
+      console.log('[FRONTEND] Opening document picker...');
       const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'text/csv', 
-          'application/vnd.ms-excel', 
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        ],
+        type: '*/*',
         copyToCacheDirectory: true,
       });
 
+      console.log('[FRONTEND] Document picker returned:', result.canceled ? 'CANCELED' : 'SUCCESS');
+
       if (!result.canceled) {
         setFile(result.assets[0]);
+        console.log('[FRONTEND] Set file in state:', result.assets[0].name);
       }
     } catch (err) {
-      console.error('Error picking document:', err);
+      console.error('[FRONTEND] Error picking document:', err);
+      Alert.alert('Picker Error', err.message);
     }
   };
 
   const handleUpload = async () => {
     if (!file) return;
 
+    console.log('[FRONTEND] Starting Salesman upload process for:', file.name);
     setLoading(true);
+    
     try {
       const token = await getToken('salesman_token');
+      console.log('[FRONTEND] Retrieved salesman token');
+      
       const formData = new FormData();
-
+      
       formData.append('file', {
         uri: file.uri,
         name: file.name,
         type: file.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });
       formData.append('fileName', file.name);
+      
+      console.log('[FRONTEND] Created FormData payload');
 
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `${api.baseURL}/api/salesman/stock/bulk`);
       xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      // Do NOT set Content-Type header. XHR sets it automatically with the correct boundary for FormData.
+      
+      console.log(`[FRONTEND] Opened XHR POST to ${api.baseURL}/api/salesman/stock/bulk`);
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          console.log(`[FRONTEND] Upload Progress: ${Math.round((event.loaded / event.total) * 100)}%`);
+        }
+      };
+
+      xhr.onreadystatechange = () => {
+        console.log(`[FRONTEND] XHR readyState changed to: ${xhr.readyState}`);
+      };
 
       xhr.onload = () => {
+        console.log('[FRONTEND] XHR OnLoad fired! Status:', xhr.status);
+        console.log('[FRONTEND] Server Response Text:', xhr.responseText);
         setLoading(false);
         try {
           const data = JSON.parse(xhr.responseText);
@@ -64,18 +84,31 @@ export default function SalesmanUpload() {
             Alert.alert('Upload Failed', data.error || 'Unknown server error');
           }
         } catch (e) {
+          console.error('[FRONTEND] Failed to parse response:', e);
           Alert.alert('Upload Failed', 'Failed to parse server response.');
         }
       };
 
-      xhr.onerror = () => {
+      xhr.onerror = (e) => {
+        console.error('[FRONTEND] XHR OnError fired!', e);
         setLoading(false);
         Alert.alert('Network Error', 'The request failed to reach the server.');
       };
 
+      xhr.ontimeout = () => {
+        console.error('[FRONTEND] XHR OnTimeout fired!');
+        setLoading(false);
+        Alert.alert('Timeout Error', 'The request timed out.');
+      };
+      
+      xhr.timeout = 30000; // 30 seconds
+
+      console.log('[FRONTEND] Sending XHR request now...');
       xhr.send(formData);
+      console.log('[FRONTEND] xhr.send() executed!');
 
     } catch (error) {
+      console.error('[FRONTEND] Try/Catch Error:', error);
       setLoading(false);
       Alert.alert('Upload Error', error.message);
     }

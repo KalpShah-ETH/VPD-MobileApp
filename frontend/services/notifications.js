@@ -29,7 +29,14 @@ export const registerForPushNotifications = async () => {
     return null;
   }
   
-  const token = (await Notifications.getExpoPushTokenAsync()).data;
+  let token;
+  try {
+    const pushTokenData = await Notifications.getExpoPushTokenAsync();
+    token = pushTokenData.data;
+  } catch (e) {
+    console.log('[NOTIFICATIONS] Failed to get push token. This is normal in Expo Go:', e.message);
+    return null;
+  }
   
   if (Platform.OS === 'android') {
     Notifications.setNotificationChannelAsync('default', {

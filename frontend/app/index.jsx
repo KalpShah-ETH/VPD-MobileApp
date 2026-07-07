@@ -60,7 +60,7 @@ export default function UnifiedLogin() {
         res = await fetch(`${api.baseURL}/api/salesman/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: usernameOrPhone, password })
+          body: JSON.stringify({ username: usernameOrPhone, password })
         });
       } else if (role === 'retailer') {
         res = await fetch(`${api.baseURL}/api/retailer/auth`, {
