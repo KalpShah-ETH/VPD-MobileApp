@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, ScrollView, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, shadow } from '../../constants/colors';
 import { api } from '../../services/api';
 import { getToken } from '../../services/auth';
@@ -8,6 +9,7 @@ import Toast from 'react-native-toast-message';
 export default function AdminSettings() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [adminsCount, setAdminsCount] = useState(0);
   const [uploads, setUploads] = useState([]);
@@ -104,13 +106,18 @@ export default function AdminSettings() {
             autoCapitalize="none"
           />
           <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="New admin password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              placeholder="New admin password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+            />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+              <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={24} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity 
             style={[styles.primaryBtn, loading && styles.disabledBtn]}
             onPress={handleCreateAdmin}
@@ -158,6 +165,9 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.bgCard, padding: 20, borderRadius: radius.md, ...shadow.sm },
   label: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: colors.textMain, marginBottom: 8 },
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 12, marginBottom: 16, fontFamily: 'Inter_400Regular', backgroundColor: colors.bgPrimary },
+  passwordContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, backgroundColor: colors.bgPrimary, marginBottom: 16 },
+  passwordInput: { flex: 1, padding: 12, fontFamily: 'Inter_400Regular', fontSize: 14 },
+  eyeBtn: { padding: 12 },
   
   primaryBtn: { backgroundColor: colors.primary, padding: 14, borderRadius: radius.sm, alignItems: 'center' },
   disabledBtn: { opacity: 0.7 },

@@ -118,21 +118,36 @@ export default function UnifiedLogin() {
       <View style={styles.segmentedControl}>
         <TouchableOpacity 
           style={[styles.segmentButton, role === 'salesman' && styles.segmentActive]}
-          onPress={() => setRole('salesman')}
+          onPress={() => {
+            setRole('salesman');
+            setUsernameOrPhone('');
+            setPassword('');
+            setErrorMsg('');
+          }}
         >
-          <Text style={[styles.segmentText, role === 'salesman' && styles.segmentTextActive]}>💼 Salesman</Text>
+          <Text style={[styles.segmentText, role === 'salesman' && styles.segmentTextActive]}>📦 Salesman</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.segmentButton, role === 'retailer' && styles.segmentActive]}
-          onPress={() => setRole('retailer')}
+          onPress={() => {
+            setRole('retailer');
+            setUsernameOrPhone('');
+            setPassword('');
+            setErrorMsg('');
+          }}
         >
-          <Text style={[styles.segmentText, role === 'retailer' && styles.segmentTextActive]}>🏪 Retailer</Text>
+          <Text style={[styles.segmentText, role === 'retailer' && styles.segmentTextActive]}>🛒 Retailer</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.segmentButton, role === 'admin' && styles.segmentActive]}
-          onPress={() => setRole('admin')}
+          onPress={() => {
+            setRole('admin');
+            setUsernameOrPhone('');
+            setPassword('');
+            setErrorMsg('');
+          }}
         >
-          <Text style={[styles.segmentText, role === 'admin' && styles.segmentTextActive]}>🛡️ Admin</Text>
+          <Text style={[styles.segmentText, role === 'admin' && styles.segmentTextActive]}>👑 Admin</Text>
         </TouchableOpacity>
       </View>
 
@@ -151,7 +166,10 @@ export default function UnifiedLogin() {
           style={styles.input}
           placeholder="Enter username/phone"
           value={usernameOrPhone}
-          onChangeText={setUsernameOrPhone}
+          onChangeText={(val) => {
+            setUsernameOrPhone(val);
+            setErrorMsg('');
+          }}
           keyboardType={role === 'salesman' ? "phone-pad" : "default"}
           autoCapitalize="none"
         />
@@ -164,7 +182,10 @@ export default function UnifiedLogin() {
                 style={styles.passwordInput}
                 placeholder="Enter password"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(val) => {
+                  setPassword(val);
+                  setErrorMsg('');
+                }}
                 secureTextEntry={!showPassword}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>

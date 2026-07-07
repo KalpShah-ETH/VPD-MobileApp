@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Switch, Alert, Modal, TextInput } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors, radius, shadow } from '../../constants/colors';
 import { api } from '../../services/api';
@@ -19,6 +20,7 @@ export default function AdminManageSalesmen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editId, setEditId] = useState(null);
   const [formData, setFormData] = useState({ name: '', companyName: '', phone: '', password: '', canUploadStock: false, active: true });
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -323,13 +325,18 @@ export default function AdminManageSalesmen() {
               value={formData.phone}
               onChangeText={t => setFormData({...formData, phone: t})}
             />
-            <TextInput
-              style={styles.input}
-              placeholder={editId ? "Leave blank to keep password" : "Password"}
-              secureTextEntry
-              value={formData.password}
-              onChangeText={t => setFormData({...formData, password: t})}
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder={editId ? "Leave blank to keep password" : "Password"}
+                secureTextEntry={!showPassword}
+                value={formData.password}
+                onChangeText={t => setFormData({...formData, password: t})}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+                <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={24} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.modalSwitchRow}>
               <Text style={styles.switchText}>Allow Stock Upload?</Text>
@@ -398,6 +405,9 @@ const styles = StyleSheet.create({
   modalContent: { backgroundColor: colors.bgCard, padding: 24, borderRadius: radius.lg, ...shadow.lg },
   modalTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', marginBottom: 20, color: colors.textMain },
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 12, marginBottom: 16, fontSize: 16, fontFamily: 'Inter_400Regular', backgroundColor: colors.bgPrimary },
+  passwordContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, backgroundColor: colors.bgPrimary, marginBottom: 16 },
+  passwordInput: { flex: 1, padding: 12, fontSize: 16, fontFamily: 'Inter_400Regular' },
+  eyeBtn: { padding: 12 },
   modalSwitchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   switchText: { fontFamily: 'Inter_600SemiBold', color: colors.textMain },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
