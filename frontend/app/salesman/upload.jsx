@@ -123,12 +123,12 @@ export default function SalesmanUpload() {
         <Text style={styles.title}>Bulk Stock Upload</Text>
       </View>
 
-      <View style={{ padding: 24, flex: 1 }}>
-        <Text style={styles.subtitle}>Upload a CSV or XLSX file to update the global catalogue.</Text>
+      <ScrollView style={{flex: 1}} contentContainerStyle={{padding: 24}}>
+        <Text style={styles.subtitle}>Select an Excel (.xlsx) file containing product inventory details to upload to your stock catalogue.</Text>
 
         {!file ? (
           <View style={styles.card}>
-            <Text style={styles.placeholder}>Select a CSV/XLSX file to upload</Text>
+            <Text style={styles.placeholder}>No file selected</Text>
             <TouchableOpacity style={styles.pickButton} onPress={pickDocument}>
               <Text style={styles.pickButtonText}>Choose File</Text>
             </TouchableOpacity>
@@ -158,7 +158,7 @@ export default function SalesmanUpload() {
             </TouchableOpacity>
           </View>
         )}
-      </View>
+      </ScrollView>
     </View>
   );
 }

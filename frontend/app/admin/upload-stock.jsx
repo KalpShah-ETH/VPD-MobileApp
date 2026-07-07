@@ -131,7 +131,7 @@ export default function AdminUploadStock() {
         <Text style={styles.title}>Bulk Stock Upload</Text>
       </View>
 
-      <View style={{padding: 24, flex: 1}}>
+      <ScrollView style={{flex: 1}} contentContainerStyle={{padding: 24}}>
         <Text style={styles.subtitle}>Upload a CSV or XLSX file to update the global catalogue for all retailers.</Text>
 
         {!file ? (
@@ -166,7 +166,7 @@ export default function AdminUploadStock() {
             </TouchableOpacity>
           </View>
         )}
-      </View>
+      </ScrollView>
     </View>
   );
 }
