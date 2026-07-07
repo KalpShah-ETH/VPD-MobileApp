@@ -38,24 +38,24 @@ export default function AdminUploadStock() {
       let rows = [];
 
       if (selectedFile.name.endsWith('.xlsx') || selectedFile.name.endsWith('.xls')) {
-        const formData = new FormData();
-        formData.append('file', {
-          uri: selectedFile.uri,
-          name: selectedFile.name,
-          type: selectedFile.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        });
+        const base64 = await FileSystem.readAsStringAsync(selectedFile.uri, { encoding: FileSystem.EncodingType.Base64 });
         
         const response = await fetch(`${api.baseURL}/api/admin/parse-excel`, {
           method: 'POST',
-          body: formData,
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            fileName: selectedFile.name,
+            base64Data: base64
+          }),
         });
         
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Backend parsing failed');
         rows = data.data;
       } else {
-        const response = await fetch(selectedFile.uri);
-        const text = await response.text();
+        const text = await FileSystem.readAsStringAsync(selectedFile.uri);
         const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
         rows = parsed.data;
       }

@@ -3,14 +3,14 @@ import * as XLSX from 'xlsx';
 
 export async function POST(req) {
   try {
-    const formData = await req.formData();
-    const file = formData.get('file');
+    const body = await req.json();
+    const { base64Data } = body;
 
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    if (!base64Data) {
+      return NextResponse.json({ error: 'No file data provided' }, { status: 400 });
     }
 
-    const buffer = await file.arrayBuffer();
+    const buffer = Buffer.from(base64Data, 'base64');
     const workbook = XLSX.read(buffer, { type: 'buffer' });
     
     if (!workbook.SheetNames.length) {

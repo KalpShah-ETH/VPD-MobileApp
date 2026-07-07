@@ -22,20 +22,15 @@ export default function AdminSettings() {
   const fetchData = async () => {
     try {
       const token = await getToken('admin_token');
-      // Mocked endpoints if backend doesn't exist yet, or real if they do
-      // The user requested parity even if it means adding screens. We will attempt to fetch or default to empty/0
-      const resAdmins = await fetch(`${api.baseURL}/api/admin/list`, {
+      const res = await fetch(`${api.baseURL}/api/admin/create`, {
         headers: { 'Authorization': `Bearer ${token}` }
-      }).then(r => r.json()).catch(() => ({ admins: [] }));
+      });
       
-      if (resAdmins && resAdmins.admins) setAdminsCount(resAdmins.admins.length);
-
-      const resUploads = await fetch(`${api.baseURL}/api/admin/uploads/history`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      }).then(r => r.json()).catch(() => ({ history: [] }));
-
-      if (resUploads && resUploads.history) setUploads(resUploads.history);
-      
+      if (res.ok) {
+        const data = await res.json();
+        if (data.adminCount !== undefined) setAdminsCount(data.adminCount);
+        if (data.recentUploads) setUploads(data.recentUploads);
+      }
     } catch (err) {
       console.log('Failed to fetch settings data', err);
     } finally {
@@ -52,7 +47,7 @@ export default function AdminSettings() {
     setLoading(true);
     try {
       const token = await getToken('admin_token');
-      const res = await fetch(`${api.baseURL}/api/admin/create-admin`, {
+      const res = await fetch(`${api.baseURL}/api/admin/create`, {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${token}`,
