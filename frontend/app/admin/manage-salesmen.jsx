@@ -7,8 +7,6 @@ import { api } from '../../services/api';
 import { getToken } from '../../services/auth';
 import Toast from 'react-native-toast-message';
 import * as DocumentPicker from 'expo-document-picker';
-import { readAsStringAsync, EncodingType } from 'expo-file-system';
-import Papa from 'papaparse';
 
 export default function AdminManageSalesmen() {
   const router = useRouter();
@@ -163,54 +161,53 @@ export default function AdminManageSalesmen() {
   const handleBulkUpload = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['text/csv', 'text/comma-separated-values'],
+        type: '*/*',
         copyToCacheDirectory: true
       });
       
-      if (result.canceled) return;
+      if (result.canceled || result.type === 'cancel') return;
       
-      Toast.show({ type: 'info', text1: 'Parsing file...' });
-      const asset = result.assets[0];
-      
-      let text = '';
-      if (Platform.OS === 'web') {
-        text = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsText(asset.file);
-        });
-      } else {
-        text = await readAsStringAsync(asset.uri);
-      }
-      
-      // Import Papa inside the function if it wasn't imported globally, 
-      // but wait, I'll need to import Papa at the top. Let's just use it here,
-      // and I'll add the import later.
-      const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
-      const jsonData = parsed.data;
-      
-      if (jsonData.length === 0) throw new Error('File is empty');
-      
-      const payload = jsonData.map(row => ({
-        name: row.name || row.Name,
-        companyName: row.companyName || row.company || row.Company,
-        phone: row.phone || row.Phone,
-        password: row.password || row.Password,
-        canUploadStock: row.canUploadStock === 'true' || row.canUploadStock === true,
-      })).filter(r => r.name && r.phone && r.password);
-      
-      if (payload.length === 0) throw new Error('No valid rows found. Check column headers.');
+      const asset = result.assets ? result.assets[0] : result;
+      if (!asset) return;
 
-      const res = await fetch(`${api.baseURL}/api/admin/salesman/bulk`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ salesmen: payload })
+      Toast.show({ type: 'info', text1: 'Uploading file...' });
+
+      const formData = new FormData();
+      formData.append('file', {
+        uri: asset.uri,
+        name: asset.name,
+        type: asset.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });
-      if (!res.ok) throw new Error('Bulk upload failed');
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${api.baseURL}/api/admin/salesman`);
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+      xhr.onload = () => {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            Toast.show({ type: 'success', text1: `Uploaded ${data.inserted} salesmen successfully` });
+            loadSalesmen(token);
+          } else {
+            Toast.show({ type: 'error', text1: 'Upload Failed', text2: data.error || 'Unknown server error' });
+          }
+        } catch (e) {
+          Toast.show({ type: 'error', text1: 'Upload Failed', text2: 'Failed to parse server response' });
+        }
+      };
+
+      xhr.onerror = () => {
+        Toast.show({ type: 'error', text1: 'Network Error', text2: 'Failed to reach server' });
+      };
+
+      xhr.ontimeout = () => {
+        Toast.show({ type: 'error', text1: 'Timeout Error', text2: 'The request timed out' });
+      };
       
-      Toast.show({ type: 'success', text1: `Uploaded ${payload.length} salesmen successfully` });
-      loadSalesmen(token);
+      xhr.timeout = 30000;
+      xhr.send(formData);
+
     } catch (err) {
       Toast.show({ type: 'error', text1: 'Upload failed', text2: err.message });
     }

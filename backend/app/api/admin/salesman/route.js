@@ -64,9 +64,59 @@ export async function POST(request) {
   }
 
   try {
+    const contentType = request.headers.get('content-type') || '';
+    
+    // Handle Native Mobile Upload (FormData + XLSX/CSV)
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await request.formData();
+      const file = formData.get('file');
+      
+      if (!file) {
+        return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+      }
+
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const XLSX = require('xlsx');
+      const workbook = XLSX.read(buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+      let count = 0;
+      for (const row of rows) {
+        const name = row.name || row.Name || row.NAME;
+        const companyName = row.companyName || row.company || row.Company || row.COMPANY;
+        const phone = row.phone || row.Phone || row.PHONE;
+        const password = String(row.password || row.Password || row.PASSWORD);
+        const canUploadStock = String(row.canUploadStock || row.CanUploadStock).toLowerCase() === 'true';
+
+        if (!name || !companyName || !phone || !password) continue;
+        const username = String(phone);
+
+        const existing = await prisma.salesman.findUnique({ where: { username } });
+        if (existing) continue;
+
+        const passwordHash = await bcrypt.hash(password, 10);
+        await prisma.salesman.create({
+          data: {
+            name: String(name),
+            companyName: String(companyName),
+            phone: username,
+            username: username,
+            passwordHash,
+            active: true,
+            canUploadStock
+          }
+        });
+        count++;
+      }
+      return NextResponse.json({ success: true, inserted: count });
+    }
+
+    // Handle JSON (Web or single creation)
     const body = await request.json();
 
-    // Support Bulk Upload for Salesmen
+    // Support Bulk Upload for Salesmen (Legacy JSON array)
     if (Array.isArray(body.salesmen)) {
       let count = 0;
       for (const s of body.salesmen) {
@@ -74,10 +124,7 @@ export async function POST(request) {
         if (!name || !companyName || !phone || !password) continue;
         const username = phone;
 
-        // Skip existing
-        const existing = await prisma.salesman.findUnique({
-          where: { username },
-        });
+        const existing = await prisma.salesman.findUnique({ where: { username } });
         if (existing) continue;
 
         const passwordHash = await bcrypt.hash(password, 10);
@@ -93,7 +140,7 @@ export async function POST(request) {
         });
         count++;
       }
-      return NextResponse.json({ success: true, count });
+      return NextResponse.json({ success: true, inserted: count });
     }
 
     const { name, companyName, phone, password, canUploadStock } = body;
@@ -103,7 +150,6 @@ export async function POST(request) {
       return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
     }
 
-    // Check if phone/username already exists
     const existing = await prisma.salesman.findUnique({
       where: { username },
     });

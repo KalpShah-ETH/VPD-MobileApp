@@ -19,11 +19,19 @@ export default function AdminUploadStock() {
         copyToCacheDirectory: true,
       });
 
-      console.log('[FRONTEND] Document picker returned:', result.canceled ? 'CANCELED' : 'SUCCESS');
+      console.log('[FRONTEND] Document picker returned:', result);
 
-      if (!result.canceled) {
-        setFile(result.assets[0]);
-        console.log('[FRONTEND] Set file in state:', result.assets[0].name);
+      if (result.canceled || result.type === 'cancel') {
+        console.log('[FRONTEND] User canceled picking');
+        return;
+      }
+
+      // Handle both Expo SDK 50+ (assets array) and older versions (direct properties)
+      const pickedFile = result.assets ? result.assets[0] : result;
+      
+      if (pickedFile) {
+        setFile(pickedFile);
+        console.log('[FRONTEND] Set file in state:', pickedFile.name);
       }
     } catch (err) {
       console.error('[FRONTEND] Error picking document:', err);
@@ -137,7 +145,7 @@ export default function AdminUploadStock() {
           <View style={styles.previewContainer}>
             <View style={styles.fileHeader}>
               <View>
-                <Text style={styles.fileName}>{file.name}</Text>
+                <Text style={styles.fileName}>{file?.name || 'Selected File'}</Text>
                 <Text style={styles.fileSize}>Ready to upload</Text>
               </View>
               <TouchableOpacity style={styles.repickBtn} onPress={pickDocument}>
@@ -146,7 +154,7 @@ export default function AdminUploadStock() {
             </View>
             
             <TouchableOpacity 
-              style={[styles.uploadButton, loading && { opacity: 0.7 }]}
+              style={[styles.uploadButton, loading ? { opacity: 0.7 } : {}]}
               onPress={handleUpload}
               disabled={loading}
             >

@@ -137,7 +137,7 @@ export default function SalesmanUpload() {
           <View style={styles.previewContainer}>
             <View style={styles.fileHeader}>
               <View>
-                <Text style={styles.fileName}>{file.name}</Text>
+                <Text style={styles.fileName}>{file?.name || 'Selected File'}</Text>
                 <Text style={styles.fileSize}>Ready to upload</Text>
               </View>
               <TouchableOpacity style={styles.repickBtn} onPress={pickDocument}>
@@ -146,7 +146,7 @@ export default function SalesmanUpload() {
             </View>
 
             <TouchableOpacity
-              style={[styles.uploadButton, loading && { opacity: 0.7 }]}
+              style={[styles.uploadButton, loading ? { opacity: 0.7 } : {}]}
               onPress={handleUpload}
               disabled={loading}
             >
