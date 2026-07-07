@@ -3,7 +3,6 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Fla
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
 import { useRouter } from 'expo-router';
 import { colors, radius, shadow } from '../../constants/colors';
 import { getToken } from '../../services/auth';
@@ -39,11 +38,21 @@ export default function AdminUploadStock() {
       let rows = [];
 
       if (selectedFile.name.endsWith('.xlsx') || selectedFile.name.endsWith('.xls')) {
-        const base64 = await FileSystem.readAsStringAsync(selectedFile.uri, { encoding: FileSystem.EncodingType.Base64 });
-        const workbook = XLSX.read(base64, { type: 'base64' });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        rows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+        const formData = new FormData();
+        formData.append('file', {
+          uri: selectedFile.uri,
+          name: selectedFile.name,
+          type: selectedFile.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+        
+        const response = await fetch(`${api.baseURL}/api/admin/parse-excel`, {
+          method: 'POST',
+          body: formData,
+        });
+        
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Backend parsing failed');
+        rows = data.data;
       } else {
         const response = await fetch(selectedFile.uri);
         const text = await response.text();

@@ -10,7 +10,7 @@ import Toast from 'react-native-toast-message';
 export default function UnifiedLogin() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const [role, setRole] = useState('salesman'); // 'salesman', 'admin'
+  const [role, setRole] = useState('salesman'); // 'salesman', 'admin', 'retailer'
   const [usernameOrPhone, setUsernameOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -41,7 +41,7 @@ export default function UnifiedLogin() {
       return;
     }
 
-    if (!password) {
+    if (!password && role !== 'retailer') {
       setErrorMsg('Password is required.');
       return;
     }
@@ -62,6 +62,12 @@ export default function UnifiedLogin() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ phone: usernameOrPhone, password })
         });
+      } else if (role === 'retailer') {
+        res = await fetch(`${api.baseURL}/api/retailer/auth`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: usernameOrPhone })
+        });
       }
 
       const data = await res.json();
@@ -72,7 +78,7 @@ export default function UnifiedLogin() {
 
       Toast.show({
         type: 'success',
-        text1: `Welcome back, ${role === 'admin' ? 'Admin' : 'Salesman'}!`,
+        text1: `Welcome back, ${role.charAt(0).toUpperCase() + role.slice(1)}!`,
         position: 'top'
       });
 
@@ -83,6 +89,9 @@ export default function UnifiedLogin() {
       } else if (role === 'salesman') {
         await saveToken('salesman_token', data.token);
         router.replace('/salesman/dashboard');
+      } else if (role === 'retailer') {
+        await saveToken('retailer_token', data.token);
+        router.replace('/retailer/browse');
       }
 
     } catch (err) {
@@ -93,6 +102,7 @@ export default function UnifiedLogin() {
 
   const getRoleLabel = () => {
     if (role === 'salesman') return 'Salesman';
+    if (role === 'retailer') return 'Retailer';
     return 'Admin';
   };
 
@@ -104,13 +114,19 @@ export default function UnifiedLogin() {
         <Text style={styles.subtitle}>Select role and sign in to continue</Text>
       </View>
 
-      {/* 2-Way Segmented Control */}
+      {/* 3-Way Segmented Control */}
       <View style={styles.segmentedControl}>
         <TouchableOpacity 
           style={[styles.segmentButton, role === 'salesman' && styles.segmentActive]}
           onPress={() => setRole('salesman')}
         >
           <Text style={[styles.segmentText, role === 'salesman' && styles.segmentTextActive]}>💼 Salesman</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.segmentButton, role === 'retailer' && styles.segmentActive]}
+          onPress={() => setRole('retailer')}
+        >
+          <Text style={[styles.segmentText, role === 'retailer' && styles.segmentTextActive]}>🏪 Retailer</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.segmentButton, role === 'admin' && styles.segmentActive]}
@@ -140,19 +156,23 @@ export default function UnifiedLogin() {
           autoCapitalize="none"
         />
 
-        <Text style={styles.label}>Password</Text>
-        <View style={styles.passwordContainer}>
-          <TextInput
-            style={styles.passwordInput}
-            placeholder="Enter password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-          />
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
-            <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={24} color={colors.textMuted} />
-          </TouchableOpacity>
-        </View>
+        {role !== 'retailer' && (
+          <>
+            <Text style={styles.label}>Password</Text>
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Enter password"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+                <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={24} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
 
         <TouchableOpacity 
           style={[styles.submitButton, loading && styles.submitDisabled]}
